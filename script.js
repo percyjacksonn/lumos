@@ -309,7 +309,7 @@ const CURRICULUM = {
       type: "teacher-notes",
       unit: 1,
       teacher: "Dr.R.Sahila Devi",
-      title: "Unit 1 Notes",
+      title: "Unit 1 ",
       filePath: "unit1-java-notes.pdf",   // your existing sample file
     },
     {
