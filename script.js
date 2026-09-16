@@ -310,7 +310,7 @@ const CURRICULUM = {
       unit: 1,
       teacher: "Dr.R.Sahila Devi",
       title: "Unit 1 ",
-      filePath: "unit1-java-notes.pdf",   // your existing sample file
+      filePath: "unit1-java-notes .pdf",   // your existing sample file
     },
     {
       subjectIndex: 3,
