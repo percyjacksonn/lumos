@@ -48,11 +48,6 @@ const GENERIC_SUBJECTS = [
   "Structural Analysis", "Surveying", "Concrete Technology", "Biomedical Instrumentation",
   "Discrete Mathematics", "Probability & Statistics",
 ];
-
-const TEACHERS = [
-  "Dr. Priya Sharma", "Mrs. Kavitha Reddy", "Mr. Arun Kumar", "Dr. Sneha Iyer",
-  "Mr. Rahul Verma", "Dr. Ramesh Nair", "Ms. Anjali Rao", "Dr. Vikram Sethi",
-];
 /* ==============================================================
    CURRICULUM — set exact subjects, teachers, codes & credits here.
    Key = "deptId-semesterNumber", e.g. "cse-3", "ece-5".
