@@ -7,7 +7,10 @@
 const supabaseUrl = "https://jlnbezpewkuqrwmcljdv.supabase.co";
 const supabaseKey = "sb_publishable_9mvDqyktUkE0JfMAJv7ukA_sJXNFxdz";
 
-supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+// FIX: guard so the whole site doesn't die if the Supabase CDN script fails to load
+var supabase = (window.supabase && window.supabase.createClient)
+  ? window.supabase.createClient(supabaseUrl, supabaseKey)
+  : null;
 console.log("Supabase connected:", supabase);
 
 // Name of the bucket you created in Supabase → Storage
@@ -17,7 +20,7 @@ const SUPABASE_BUCKET = "study-materials";
 // Only works if the bucket (or the file's folder) is set to Public.
 // If you made the bucket Private, swap this for createSignedUrl() instead.
 function getPublicFileUrl(path) {
-  if (!path) return null;
+  if (!path || !supabase) return null;
   const { data } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
   return data ? data.publicUrl : null;
 }
@@ -36,6 +39,12 @@ const DEPARTMENTS = [
   { id: "aids", name: "AI & DS", full: "Artificial Intelligence & Data Science", icon: "sparkles", blurb: "ML, stats and data notes from your seniors.", accent: "coral" },
   { id: "it", name: "AI & ML", full: "Artificial Intelligence & Machine Learning", icon: "globe", blurb: "Web, networks and databases, semester by semester.", accent: "sun" },
   { id: "bme", name: "BME", full: "Biomedical Engineering", icon: "activity", blurb: "Instrumentation and physiology notes, all verified.", accent: "leaf" },
+];
+
+// FIX: TEACHERS was used in buildData() but never defined -> ReferenceError -> blank page
+const TEACHERS = [
+  "Dr. Priya Sharma", "Mrs. Kavitha Reddy", "Mr. Arun Kumar", "Dr. Sneha Iyer",
+  "Dr. Ramesh Nair", "Mrs. Lakshmi Devi", "Mr. Karthik Raja", "Dr. Meena Subramanian",
 ];
 
 const GENERIC_SUBJECTS = [
@@ -235,7 +244,7 @@ const CURRICULUM = {
 
     {
       subjectIndex: 0,
-      type: "lab-",
+      type: "lab",
       unit: '14 15 ',         // PYQs aren't unit-specific, so unit is null
       teacher: "Mrs.R.Meenakshiammal",
       title: "DSA Manual",
@@ -585,6 +594,7 @@ const state = {
   searchQuery: "",
   mobileMenuOpen: false,
   toast: null,
+  user: null, authOpen: false, authMode: "login", authError: "", authInfo: "", authForm: {}, pending: null, downloaded: [],
 };
 let toastTimer = null;
 let uploadedFile = null; // holds the File object chosen in the upload form
@@ -625,10 +635,70 @@ function openResource(id) {
   state.recent = [id, ...state.recent.filter((x) => x !== id)].slice(0, 6);
   render();
 }
-function toggleSave(id) {
-  if (state.saved.has(id)) { state.saved.delete(id); showToast("Removed from saved"); }
-  else { state.saved.add(id); showToast("Saved for later"); }
+/* ==================== AUTH (Supabase Auth + per-user data) ==================== */
+// Returns true if logged in. If not, opens the login popup and remembers what
+// the user was trying to do, so it runs automatically right after they log in.
+function requireLogin(retry) {
+  if (state.user) return true;
+  if (!supabase) { showToast("Login is unavailable right now"); return false; }
+  state.pending = retry; state.authOpen = true; state.authMode = "login"; state.authError = ""; state.authInfo = "";
   render();
+  return false;
+}
+function userName() {
+  const u = state.user;
+  return u ? ((u.user_metadata && u.user_metadata.username) || (u.email || "").split("@")[0]) : "";
+}
+async function loadUserData() {
+  if (!state.user || !supabase) { state.saved = new Set(); state.downloaded = []; return; }
+  const [s, d] = await Promise.all([
+    supabase.from("saved_resources").select("resource_id"),
+    supabase.from("downloads").select("resource_id").order("created_at", { ascending: false }).limit(50),
+  ]);
+  state.saved = new Set((s.data || []).map((x) => x.resource_id).filter((id) => resourcesById[id]));
+  state.downloaded = [...new Set((d.data || []).map((x) => x.resource_id))].filter((id) => resourcesById[id]).slice(0, 6);
+}
+async function submitAuth(form) {
+  const signup = state.authMode === "signup";
+  const email = form.elements.email.value.trim();
+  const password = form.elements.password.value;
+  const username = signup ? form.elements.username.value.trim() : "";
+  state.authForm = { email, username };
+  if (signup && username.length < 3) { state.authError = "Username must be at least 3 characters."; render(); return; }
+  if (password.length < 6) { state.authError = "Password must be at least 6 characters."; render(); return; }
+  const btn = form.querySelector('button[type="submit"]');
+  if (btn) { btn.disabled = true; btn.textContent = "Please wait..."; }
+  const res = signup
+    ? await supabase.auth.signUp({ email, password, options: { data: { username } } })
+    : await supabase.auth.signInWithPassword({ email, password });
+  if (res.error) { state.authError = res.error.message; state.authInfo = ""; render(); return; }
+  if (!res.data.session) { // email confirmation is switched on in Supabase
+    state.authMode = "login"; state.authError = ""; state.authInfo = "Account created! Confirm the email we sent you, then log in."; render(); return;
+  }
+  state.user = res.data.session.user;
+  await loadUserData();
+  const retry = state.pending;
+  state.authOpen = false; state.pending = null; state.authError = ""; state.authInfo = ""; state.authForm = {};
+  render(); showToast("Welcome, " + userName() + "!");
+  if (retry) retry();
+}
+async function logout() {
+  if (supabase) await supabase.auth.signOut();
+  state.user = null; state.saved = new Set(); state.downloaded = [];
+  showToast("Logged out");
+}
+
+async function toggleSave(id) {
+  if (!requireLogin(() => toggleSave(id))) return;
+  if (state.saved.has(id)) {
+    state.saved.delete(id); showToast("Removed from saved");
+    const { error } = await supabase.from("saved_resources").delete().match({ user_id: state.user.id, resource_id: id });
+    if (error) console.error(error);
+  } else {
+    state.saved.add(id); showToast("Saved for later");
+    const { error } = await supabase.from("saved_resources").insert({ user_id: state.user.id, resource_id: id });
+    if (error) console.error(error);
+  }
 }
 
 // ==== VIEW / DOWNLOAD / COPY LINK (NEW — these now do real things) ====
@@ -637,6 +707,7 @@ function viewResource(id) {
   if (!r || !r.url) { showToast("This is a demo card — no real file attached yet"); return; }
   window.open(r.url, "_blank", "noopener");
 }async function downloadResource(id) {
+  if (!requireLogin(() => downloadResource(id))) return;
   const r = resourcesById[id];
 
   if (!r || !r.filePath) {
@@ -664,6 +735,11 @@ function viewResource(id) {
   link.remove();
 
   URL.revokeObjectURL(blobUrl);
+
+  // remember this download for the user (and for the admin's records)
+  const { error: logErr } = await supabase.from("downloads").insert({ user_id: state.user.id, resource_id: id });
+  if (logErr) console.error(logErr);
+  else { state.downloaded = [id, ...state.downloaded.filter((x) => x !== id)].slice(0, 6); render(); }
 }
 function copyResourceLink(id) {
   const r = resourcesById[id];
@@ -1153,6 +1229,37 @@ function renderResourceModal() {
     </div>
   </div>`;
 }
+function renderAuthModal() {
+  if (!state.authOpen) return "";
+  const su = state.authMode === "signup", f = state.authForm || {};
+  return `
+  <div class="modal-overlay" data-action="close-auth">
+    <div class="modal-panel" style="max-width:440px;">
+      <div class="modal-head">
+        <div class="modal-head-top">
+          <div class="modal-tags"><span class="badge badge-sun">🔒 Members only</span></div>
+          <button class="icon-btn" style="width:32px;height:32px;border-width:2px;flex-shrink:0;" data-action="close-auth">${icon("x", 15)}</button>
+        </div>
+        <h2 class="font-display modal-title">${su ? "Create your account" : "Welcome back"}</h2>
+        <p class="modal-sub">Log in once to download and save notes. We'll remember you on this device.</p>
+      </div>
+      <div class="modal-body">
+        <form data-action="auth-submit" style="display:flex;flex-direction:column;gap:14px;">
+          ${su ? `<div class="field"><label>Username</label><input name="username" type="text" placeholder="e.g. pooja_j" value="${esc(f.username)}" required /></div>` : ""}
+          <div class="field"><label>Email</label><input name="email" type="email" placeholder="you@college.edu" value="${esc(f.email)}" required /></div>
+          <div class="field"><label>Password</label><input name="password" type="password" placeholder="At least 6 characters" required /></div>
+          ${state.authError ? `<p class="form-note" style="color:#F0523A;">${esc(state.authError)}</p>` : ""}
+          ${state.authInfo ? `<p class="form-note" style="color:#1E8A5C;">${esc(state.authInfo)}</p>` : ""}
+          <button type="submit" class="btn btn-primary btn-lg btn-full">${su ? "Sign up" : "Log in"} ${icon("arrowRight", 16)}</button>
+        </form>
+        <p class="form-note" style="text-align:center;">
+          ${su ? "Already have an account?" : "New here?"}
+          <button class="crumb" data-action="switch-auth" style="font-weight:800;text-decoration:underline;">${su ? "Log in" : "Create an account"}</button>
+        </p>
+      </div>
+    </div>
+  </div>`;
+}
 function infoBlock(label, value) {
   return `<div><div class="info-label">${label}</div><div class="info-value">${esc(value)}</div></div>`;
 }
@@ -1231,8 +1338,9 @@ function renderDashboardPage() {
   const recentList = state.recent.map((id) => resourcesById[id]).filter(Boolean);
   return `
   <div class="wrap" style="padding:40px 0;">
-    <h1 class="font-display dash-title">Welcome back 👋</h1>
+    <h1 class="font-display dash-title">Welcome back${state.user ? ", " + esc(userName()) : ""} 👋</h1>
     <p class="dash-sub">B.E. CSE · Semester 3</p>
+    ${state.user ? `<button class="btn btn-secondary btn-sm" data-action="logout">Log out</button>` : `<button class="btn btn-primary btn-sm" data-action="open-auth">Log in</button>`}
     <div class="grid dash-grid">
       <button class="doodle-card dash-card" style="background:#FDE4E0;" data-action="go-browse">
         ${icon("bookOpen", 20)}
@@ -1250,6 +1358,10 @@ function renderDashboardPage() {
         <p class="dash-card-sub">Share something new</p>
       </button>
     </div>
+    ${state.downloaded.length ? `<div style="margin-top:40px;">
+      <div class="section-head">${icon("download", 16)}<h2 class="font-display">Your downloads</h2></div>
+      <div class="grid resource-grid">${state.downloaded.map((id) => resourcesById[id]).filter(Boolean).map((r) => renderResourceCard(r)).join("")}</div>
+    </div>` : ""}
     <div style="margin-top:40px;">
       <div class="section-head">${icon("clock", 16)}<h2 class="font-display">Recently viewed</h2></div>
       ${recentList.length === 0 ? renderEmptyState("Nothing viewed yet", "Open a resource and it'll show up here.") :
@@ -1359,6 +1471,7 @@ function render() {
     <main>${pageHTML}</main>
     ${renderFooter()}
     ${renderResourceModal()}
+    ${renderAuthModal()}
     ${renderToast()}
   `;
   const app = document.getElementById("app");
@@ -1418,6 +1531,14 @@ document.addEventListener("click", (e) => {
   setState({ activeResourceId: null });
   break;
 }
+    case "open-auth": setState({ authOpen: true, authMode: "login", authError: "", authInfo: "", pending: null }); break;
+    case "close-auth": {
+      if (el.classList.contains("modal-overlay") && e.target !== el) break;
+      setState({ authOpen: false, pending: null, authError: "", authInfo: "" });
+      break;
+    }
+    case "switch-auth": setState({ authMode: state.authMode === "login" ? "signup" : "login", authError: "", authInfo: "" }); break;
+    case "logout": logout(); break;
     case "toggle-mobile-menu": setState({ mobileMenuOpen: !state.mobileMenuOpen }); break;
     case "search-goto-subject": goToSubjectFromSearch(el.getAttribute("data-id")); break;
     case "search-goto-resource": goToResourceFromSearch(el.getAttribute("data-id")); break;
@@ -1534,5 +1655,22 @@ document.addEventListener("submit", async (e) => {
   render();
 });
 
+document.addEventListener("submit", (e) => {
+  const form = e.target.closest('[data-action="auth-submit"]');
+  if (!form) return;
+  e.preventDefault();
+  submitAuth(form);
+});
+
 /* ============================== INIT ============================== */
 render();
+// Supabase keeps the login in the browser, so returning students are recognised
+// automatically (this fires once on page load with the saved session, if any).
+if (supabase) {
+  supabase.auth.onAuthStateChange((event, session) => {
+    const u = session ? session.user : null;
+    if ((u && u.id) === (state.user && state.user.id)) return;
+    state.user = u;
+    setTimeout(async () => { await loadUserData(); render(); }, 0);
+  });
+}
