@@ -8,10 +8,21 @@ const supabaseUrl = "https://jlnbezpewkuqrwmcljdv.supabase.co";
 const supabaseKey = "sb_publishable_9mvDqyktUkE0JfMAJv7ukA_sJXNFxdz";
 
 // FIX: guard so the whole site doesn't die if the Supabase CDN script fails to load
+const REMEMBER_KEY = "lumos-remember"; // "0" = forget when tab closes
+const authStorage = {
+  getItem: (k) => localStorage.getItem(k) ?? sessionStorage.getItem(k),
+  setItem(k, v) {
+    const keep = localStorage.getItem(REMEMBER_KEY) !== "0";
+    (keep ? sessionStorage : localStorage).removeItem(k);
+    (keep ? localStorage : sessionStorage).setItem(k, v);
+  },
+  removeItem(k) { localStorage.removeItem(k); sessionStorage.removeItem(k); },
+};
 var supabase = (window.supabase && window.supabase.createClient)
-  ? window.supabase.createClient(supabaseUrl, supabaseKey)
+  ? window.supabase.createClient(supabaseUrl, supabaseKey, {
+      auth: { storage: authStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "pkce" },
+    })
   : null;
-console.log("Supabase connected:", supabase);
 
 // Name of the bucket you created in Supabase → Storage
 const SUPABASE_BUCKET = "study-materials";
@@ -23,6 +34,16 @@ function getPublicFileUrl(path) {
   if (!path || !supabase) return null;
   const { data } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
   return data ? data.publicUrl : null;
+}
+// FIX: the resource card only ever tried resource.url (a demo-only field).
+// Real uploaded files only have a filePath, so their preview/open never
+// worked. This resolves whichever one the resource actually has.
+function resourceFileUrl(r) {
+  if (!r) return null;
+  return r.url || getPublicFileUrl(r.filePath);
+}
+function isPdfPath(path) {
+  return !!path && path.toLowerCase().split("?")[0].endsWith(".pdf");
 }
 
 const hash = (str) => {
@@ -532,6 +553,8 @@ function deptTotals(deptId) {
   Object.values(subjectsById).forEach((sub) => { if (sub.deptId === deptId) { s++; r += sub.resourceIds.length; } });
   return { s, r };
 }
+const DEPT_BG = { cse: "#fcc7df", ece: "#b6daf8", eee: "#fae9bc", mech: "#bff8d9", aids: "#decef7", it: "#fcdabe", bme: "#e0c4d1" };
+function deptBg(id) { return DEPT_BG[id] || "#fff"; }
 function deptById(id) { return DEPARTMENTS.find((d) => d.id === id); }
 function accentBg(accent) { return { coral: "#FDE4E0", sky: "#E3F2FF", sun: "#FFF3D2", leaf: "#E1F5EC" }[accent] || "#fff"; }
 function groupByUnit(list) {
@@ -576,6 +599,7 @@ linkedin: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7.5 10v7M7
   sparkles: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
   activity: '<path d="M3 12h4l2 8 4-16 2 8h6"/>',
+  logOut: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
 };
 function icon(name, size = 16, extra = "") {
   return `<svg class="ic icon" width="${size}" height="${size}" viewBox="0 0 24 24" style="${extra}">${ICONS[name] || ""}</svg>`;
@@ -595,6 +619,8 @@ const state = {
   mobileMenuOpen: false,
   toast: null,
   user: null, authOpen: false, authMode: "login", authError: "", authInfo: "", authForm: {}, pending: null, downloaded: [],
+  authTab: "password", otpSent: false, profileTab: "overview",
+  avatar: null, avatarOpen: false, editingName: false, codeOpen: false, isAdmin: false, uploadUntil: 0, username: null,
 };
 let toastTimer = null;
 let uploadedFile = null; // holds the File object chosen in the upload form
@@ -645,48 +671,151 @@ function requireLogin(retry) {
   render();
   return false;
 }
+const canUpload = () => !!state.user && (state.isAdmin || state.uploadUntil > Date.now());
 function userName() {
   const u = state.user;
-  return u ? ((u.user_metadata && u.user_metadata.username) || (u.email || "").split("@")[0]) : "";
+  return u ? (state.username || (u.user_metadata && u.user_metadata.username) || (u.email || "").split("@")[0]) : "";
+}
+let resourcesReady = Promise.resolve();
+function addDbResource(r) {
+  const sub = subjectsById[r.subject_id]; if (!sub) return;
+  const res = makeRealResource({ subjectId: sub.id, subjectName: sub.name, type: r.type, unit: r.unit, teacher: r.teacher || r.uploaded_by || "Faculty", title: r.title, filePath: r.file_path, seed: "db-" + r.id });
+  resourcesById[res.id] = res;
+  if (!sub.resourceIds.includes(res.id)) sub.resourceIds.push(res.id);
+}
+async function loadUploadedResources() {
+  if (!supabase) return;
+  const { data, error } = await supabase.from("resources").select("*").order("created_at");
+  if (error) { console.error(error); return; }
+  data.forEach(addDbResource); render();
 }
 async function loadUserData() {
-  if (!state.user || !supabase) { state.saved = new Set(); state.downloaded = []; return; }
+  await resourcesReady;
+  if (!state.user || !supabase) { Object.assign(state, { saved: new Set(), downloaded: [], avatar: null, isAdmin: false, uploadUntil: 0, username: null }); return; }
   const [s, d] = await Promise.all([
     supabase.from("saved_resources").select("resource_id"),
     supabase.from("downloads").select("resource_id").order("created_at", { ascending: false }).limit(50),
   ]);
   state.saved = new Set((s.data || []).map((x) => x.resource_id).filter((id) => resourcesById[id]));
   state.downloaded = [...new Set((d.data || []).map((x) => x.resource_id))].filter((id) => resourcesById[id]).slice(0, 6);
+  const uid = state.user.id;
+  const [p, a, ua] = await Promise.all([
+    supabase.from("profiles").select("avatar,username").eq("id", uid).maybeSingle(),
+    supabase.from("admins").select("user_id").eq("user_id", uid).maybeSingle(),
+    supabase.from("upload_access").select("expires_at").eq("user_id", uid).maybeSingle(),
+  ]);
+  state.avatar = p.data ? p.data.avatar : null;
+  state.username = p.data && p.data.username ? p.data.username : null;
+  state.isAdmin = !!a.data;   // UI hint only: the database decides what an admin may actually do
+  state.uploadUntil = ua.data ? new Date(ua.data.expires_at).getTime() : 0;
 }
-async function submitAuth(form) {
-  const signup = state.authMode === "signup";
-  const email = form.elements.email.value.trim();
-  const password = form.elements.password.value;
-  const username = signup ? form.elements.username.value.trim() : "";
-  state.authForm = { email, username };
-  if (signup && username.length < 3) { state.authError = "Username must be at least 3 characters."; render(); return; }
-  if (password.length < 6) { state.authError = "Password must be at least 6 characters."; render(); return; }
-  const btn = form.querySelector('button[type="submit"]');
-  if (btn) { btn.disabled = true; btn.textContent = "Please wait..."; }
-  const res = signup
-    ? await supabase.auth.signUp({ email, password, options: { data: { username } } })
-    : await supabase.auth.signInWithPassword({ email, password });
-  if (res.error) { state.authError = res.error.message; state.authInfo = ""; render(); return; }
-  if (!res.data.session) { // email confirmation is switched on in Supabase
-    state.authMode = "login"; state.authError = ""; state.authInfo = "Account created! Confirm the email we sent you, then log in."; render(); return;
-  }
-  state.user = res.data.session.user;
+/* ---------- auth helpers ---------- */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const COMMON_PW = ["password", "password1", "12345678", "123456789", "qwerty123", "iloveyou", "admin123", "welcome1"];
+const pwChecks = (p) => [["8+ characters", p.length >= 8], ["Upper & lower case", /[a-z]/.test(p) && /[A-Z]/.test(p)], ["A number", /\d/.test(p)], ["A symbol", /[^A-Za-z0-9]/.test(p)]];
+const pwOk = (p) => pwChecks(p).slice(0, 3).every((c) => c[1]) && !COMMON_PW.includes(p.toLowerCase());
+const lock = { n: 0, until: 0 };   // client-side throttle (Supabase also rate-limits server-side)
+let resendAt = 0;
+function authBad(m) { state.authError = m; state.authInfo = ""; render(); }
+function isLocked() {
+  const sec = Math.ceil((lock.until - Date.now()) / 1000);
+  if (sec > 0) { authBad(`Too many attempts. Try again in ${sec}s.`); return true; }
+  return false;
+}
+function recordFail() { if (++lock.n >= 5) lock.until = Date.now() + 30000 * 2 ** Math.min(lock.n - 5, 4); }
+async function authDone(user) {
+  lock.n = 0; state.user = user;
   await loadUserData();
   const retry = state.pending;
-  state.authOpen = false; state.pending = null; state.authError = ""; state.authInfo = ""; state.authForm = {};
+  Object.assign(state, { authOpen: false, pending: null, authError: "", authInfo: "", otpSent: false, authStep: "form", authForm: {} });
   render(); showToast("Welcome, " + userName() + "!");
   if (retry) retry();
 }
+async function submitAuth(form) {
+  if (isLocked()) return;
+  const su = state.authMode === "signup", v = (n) => (form.elements[n] ? form.elements[n].value : "");
+  const email = v("email").trim().toLowerCase(), password = v("password"), username = v("username").trim();
+  state.authForm = { email, username };
+  if (!EMAIL_RE.test(email)) return authBad("Enter a valid email address.");
+  if (su) {
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return authBad("Username: 3-20 letters, numbers or underscores.");
+    if (!pwOk(password)) return authBad("Choose a stronger password: 8+ characters, upper & lower case, and a number.");
+    if (password !== v("confirm")) return authBad("Passwords don't match.");
+  } else if (!password) return authBad("Enter your password.");
+  const btn = form.querySelector('button[type="submit"]');
+  if (btn) { btn.disabled = true; btn.textContent = "Please wait..."; }
+  if (!su) { // "remember me": keep the session (never the password) in this browser
+    const keep = form.elements.remember && form.elements.remember.checked;
+    localStorage.setItem(REMEMBER_KEY, keep ? "1" : "0");
+    keep ? localStorage.setItem("lumos-email", email) : localStorage.removeItem("lumos-email");
+    const res = await supabase.auth.signInWithPassword({ email, password });
+    if (res.error) {
+      recordFail();
+      if (/not confirmed/i.test(res.error.message || "")) {
+        await supabase.auth.resend({ type: "signup", email });
+        Object.assign(state, { authMode: "signup", authStep: "verify", authError: "", authInfo: "Verify your email first — we sent a new 6-digit code." });
+        resendAt = Date.now() + 60000; return render();
+      }
+      return authBad("Wrong email or password.");
+    }
+    return authDone(res.data.session.user);
+  }
+  const { data: free } = await supabase.rpc("username_available", { u: username });
+  if (free === false) return authBad("That username is taken.");
+  const res = await supabase.auth.signUp({ email, password, options: { data: { username } } });
+  if (res.error) return authBad(/password/i.test(res.error.message) ? "That password is too weak or was found in a data breach. Try another." : res.error.message);
+  const ids = res.data.user && res.data.user.identities;
+  if (ids && !ids.length) return authBad("That email already has an account — try logging in instead.");
+  if (res.data.session) return authDone(res.data.session.user);
+  resendAt = Date.now() + 60000;
+  Object.assign(state, { authStep: "verify", authError: "", authInfo: "We sent a 6-digit code to " + email + "." });
+  render();
+}
+async function sendOtp(form) {
+  if (isLocked()) return;
+  const email = form.elements.email.value.trim().toLowerCase();
+  state.authForm = { ...state.authForm, email };
+  if (!EMAIL_RE.test(email)) return authBad("Enter a valid email address.");
+  const btn = form.querySelector('button[type="submit"]');
+  if (btn) { btn.disabled = true; btn.textContent = "Sending..."; }
+  await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+  resendAt = Date.now() + 60000; recordFail(); // generic reply: never reveals whether the email has an account
+  Object.assign(state, { otpSent: true, authError: "", authInfo: "If an account exists for " + email + ", a 6-digit code is on its way." });
+  render();
+}
+async function verifyOtp(form) {
+  if (isLocked()) return;
+  const token = form.elements.code.value.replace(/\D/g, "");
+  if (token.length !== 6) return authBad("Enter the 6-digit code.");
+  const btn = form.querySelector('button[type="submit"]');
+  if (btn) { btn.disabled = true; btn.textContent = "Verifying..."; }
+  const { data, error } = await supabase.auth.verifyOtp({ email: state.authForm.email, token, type: state.authMode === "signup" ? "signup" : "email" });
+  if (error || !data.session) { recordFail(); return authBad("That code is wrong or expired. Request a new one."); }
+  authDone(data.session.user);
+}
+async function resendCode() {
+  const wait = Math.ceil((resendAt - Date.now()) / 1000);
+  if (wait > 0) return authBad(`Please wait ${wait}s before requesting another code.`);
+  const email = state.authForm.email;
+  const { error } = state.authMode === "signup"
+    ? await supabase.auth.resend({ type: "signup", email })
+    : await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+  resendAt = Date.now() + 60000;
+  if (error && state.authMode === "signup") return authBad(error.message);
+  state.authError = ""; state.authInfo = "A new code is on its way."; render();
+}
 async function logout() {
   if (supabase) await supabase.auth.signOut();
-  state.user = null; state.saved = new Set(); state.downloaded = [];
+  Object.assign(state, { user: null, saved: new Set(), downloaded: [], avatar: null, isAdmin: false, uploadUntil: 0, username: null, avatarOpen: false, editingName: false, codeOpen: false });
   showToast("Logged out");
+  setState({ page: "home" });
 }
+async function oauth(provider) {
+  if (!supabase) { showToast("Login is unavailable right now"); return; }
+  const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo: window.location.origin + window.location.pathname } });
+  if (error) { authBad(error.message); showToast(error.message); }
+}
+const loginWithGoogle = () => oauth("google");
 
 async function toggleSave(id) {
   if (!requireLogin(() => toggleSave(id))) return;
@@ -704,8 +833,9 @@ async function toggleSave(id) {
 // ==== VIEW / DOWNLOAD / COPY LINK (NEW — these now do real things) ====
 function viewResource(id) {
   const r = resourcesById[id];
-  if (!r || !r.url) { showToast("This is a demo card — no real file attached yet"); return; }
-  window.open(r.url, "_blank", "noopener");
+  const url = resourceFileUrl(r);
+  if (!url) { showToast("No file is attached to this resource yet"); return; }
+  window.open(url, "_blank", "noopener");
 }async function downloadResource(id) {
   if (!requireLogin(() => downloadResource(id))) return;
   const r = resourcesById[id];
@@ -758,11 +888,19 @@ function quickCategory(cat) {
   render(); scrollTop();
 }
 
+// FIX: "dbms" used to return nothing, because the subject is stored as
+// "Database Management Systems" / code "CS3492" — neither contains "dbms".
+// We now also match against the initials of each word in the name.
+const acronymOf = (name) => name.split(/\s+/).filter(Boolean).map((w) => w[0]).join("").toLowerCase();
 function searchResultsFor(q) {
   q = q.trim().toLowerCase();
   if (q.length < 2) return { subjects: [], resources: [], teachers: [] };
-  const subjects = Object.values(subjectsById).filter((s) => s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q)).slice(0, 6);
-  const resources = Object.values(resourcesById).filter((r) => r.title.toLowerCase().includes(q) || r.subjectName.toLowerCase().includes(q)).slice(0, 8);
+  const subjects = Object.values(subjectsById).filter((s) =>
+    s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q) || acronymOf(s.name).includes(q)
+  ).slice(0, 6);
+  const resources = Object.values(resourcesById).filter((r) =>
+    r.title.toLowerCase().includes(q) || r.subjectName.toLowerCase().includes(q) || acronymOf(r.subjectName).includes(q)
+  ).slice(0, 8);
   const teacherSet = new Set();
   TEACHERS.forEach((t) => { if (t.toLowerCase().includes(q)) teacherSet.add(t); });
   return { subjects, resources, teachers: [...teacherSet] };
@@ -797,24 +935,24 @@ function renderHeader() {
       <nav class="main-nav">
         <button data-action="go-home" class="nav-link ${state.page === "home" ? "active" : ""}">Home</button>
         <button data-action="go-browse" class="nav-link ${state.page === "browse" ? "active" : ""}">Courses</button>
-        <button data-action="set-page" data-page="dashboard" class="nav-link ${state.page === "dashboard" ? "active" : ""}">Dashboard</button>
         <button data-action="set-page" data-page="upload" class="nav-link ${state.page === "upload" ? "active" : ""}">Contribute</button>
       </nav>
       <div class="header-actions">
-        <button class="icon-btn" data-action="open-search" aria-label="Search">${icon("search", 17)}</button>
-        <button class="icon-btn hide-sm" data-action="set-page" data-page="saved" aria-label="Saved">
+        <button class="icon-btn ${state.searchOpen ? "on" : ""}" data-action="open-search" aria-label="Search">${icon("search", 17)}</button>
+        <button class="icon-btn hide-sm ${state.page === "saved" ? "on" : ""}" data-action="set-page" data-page="saved" aria-label="Saved">
           ${state.saved.size ? icon("heart", 17, "color:#F0523A; fill:#F0523A;") : icon("heart", 17)}
         </button>
-        <button class="icon-btn sun hide-sm" data-action="set-page" data-page="dashboard" aria-label="Dashboard">${icon("user", 17)}</button>
-        <button class="icon-btn show-mobile" data-action="toggle-mobile-menu">${state.mobileMenuOpen ? icon("x", 18) : icon("menu", 18)}</button>
+        <button class="icon-btn hide-sm ${state.page === "profile" ? "on" : ""}" data-action="set-page" data-page="profile" aria-label="Profile">${icon("user", 17)}</button>
+        <button class="icon-btn show-mobile ${state.mobileMenuOpen ? "on" : ""}" data-action="toggle-mobile-menu">${state.mobileMenuOpen ? icon("x", 18) : icon("menu", 18)}</button>
       </div>
     </div>
     ${state.mobileMenuOpen ? `
     <div class="mobile-menu">
-      <button data-action="go-home">Home</button>
-      <button data-action="go-browse">Courses</button>
-      <button data-action="set-page" data-page="saved">Saved</button>
-      <button data-action="set-page" data-page="upload">Contribute</button>
+      <button class="${state.page === "home" ? "active" : ""}" data-action="go-home">🏠 Home</button>
+      <button class="${state.page === "browse" ? "active" : ""}" data-action="go-browse">📚 Courses</button>
+      <button class="${state.page === "saved" ? "active" : ""}" data-action="set-page" data-page="saved">❤️ Saved</button>
+<button class="${state.page === "upload" ? "active" : ""}" data-action="set-page" data-page="upload">⬆️ Contribute</button>
+      <button class="${state.page === "profile" ? "active" : ""}" data-action="set-page" data-page="profile">👤 Profile</button>
     </div>` : ""}
   </header>`;
 }
@@ -898,8 +1036,8 @@ function renderHomePage() {
       ${DEPARTMENTS.map((d) => {
         const t = deptTotals(d.id);
         return `
-        <button class="doodle-card dept-card" data-action="select-dept" data-dept="${d.id}">
-          <div class="dept-icon" style="background:${accentBg(d.accent)}">${icon(d.icon, 20)}</div>
+        <button class="doodle-card dept-card" style="background:${deptBg(d.id)}" data-action="select-dept" data-dept="${d.id}">
+          <div class="dept-icon" style="background:#fff">${icon(d.icon, 20)}</div>
           <div class="font-display dept-title">${d.name}</div>
           <p class="dept-blurb">${d.blurb}</p>
           <div class="dept-foot"><span>${t.s} subjects · ${t.r} files</span>${icon("arrowRight", 15)}</div>
@@ -970,8 +1108,8 @@ function renderBrowsePage() {
         ${DEPARTMENTS.map((d) => {
           const t = deptTotals(d.id);
           return `
-          <button class="doodle-card dept-card" data-action="select-dept" data-dept="${d.id}">
-            <div class="dept-icon" style="background:${accentBg(d.accent)}">${icon(d.icon, 20)}</div>
+          <button class="doodle-card dept-card" style="background:${deptBg(d.id)}" data-action="select-dept" data-dept="${d.id}">
+            <div class="dept-icon" style="background:#fff">${icon(d.icon, 20)}</div>
             <div class="font-display dept-title">${d.name}</div>
             <p class="dept-blurb">${d.full}</p>
             <div class="dept-foot"><span>${t.s} subjects · ${t.r} files</span>${icon("arrowRight", 15)}</div>
@@ -1195,18 +1333,15 @@ function renderResourceModal() {
           ${infoBlock("Downloads", resource.downloads)}
         </div>
         <p class="modal-desc">${cat.desc}. Reviewed for accuracy before publishing so you can revise with confidence.</p>
-       ${resource.url ? `
-  <iframe
-    class="pdf-preview"
-    src="${esc(resource.url)}"
-    title="${esc(resource.title)}">
-  </iframe>
-` : `
-  <div class="preview-box">
-    ${icon("fileText", 28, "color:var(--ink-66)")}
-    <span>No PDF is attached to this resource yet.</span>
-  </div>
-`}
+       ${(() => {
+         const fileUrl = resourceFileUrl(resource);
+         if (!fileUrl) return `<div class="preview-box">${icon("fileText", 28, "color:var(--ink-66)")}<span>No file is attached to this resource yet.</span></div>`;
+         const pdfPath = resource.url || resource.filePath || "";
+         // PDFs preview directly. Word/PowerPoint files are routed through
+         // Google's viewer so they still preview instead of just downloading.
+         const src = isPdfPath(pdfPath) ? fileUrl : `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`;
+         return `<iframe class="pdf-preview" src="${esc(src)}" title="${esc(resource.title)}" loading="lazy"></iframe>`;
+       })()}
         <div class="modal-actions">
           <button class="btn btn-primary" data-action="view-resource" data-id="${esc(resource.id)}">${icon("eye", 15)} Open PDF</button>
           <button class="btn btn-secondary" data-action="download-resource" data-id="${esc(resource.id)}">${icon("download", 15)} Download</button>
@@ -1229,37 +1364,58 @@ function renderResourceModal() {
     </div>
   </div>`;
 }
+function pwField(label, name, ac, ph) {
+  return `<div class="field"><label>${label}</label><div class="pw-wrap"><input name="${name}" type="password" autocomplete="${ac}" placeholder="${ph}" maxlength="72" required /><button type="button" class="pw-eye" data-action="toggle-pw" aria-label="Show or hide password">${icon("eye", 16)}</button></div></div>`;
+}
 function renderAuthModal() {
   if (!state.authOpen) return "";
-  const su = state.authMode === "signup", f = state.authForm || {};
+  const su = state.authMode === "signup", f = state.authForm || {}, verify = su && state.authStep === "verify";
+  const tab = su ? "password" : (state.authTab || "password");
+  const err = state.authError ? `<p class="form-note auth-err" role="alert">${esc(state.authError)}</p>` : "";
+  const inf = state.authInfo ? `<p class="form-note auth-ok">${esc(state.authInfo)}</p>` : "";
+  const email = `<div class="field"><label>Email</label><input name="email" type="email" autocomplete="email" placeholder="you@college.edu" value="${esc(f.email || localStorage.getItem("lumos-email") || "")}" maxlength="254" required /></div>`;
+  const go = (t) => `<button type="submit" class="btn btn-primary btn-lg btn-full">${t} ${icon("arrowRight", 16)}</button>`;
+  const codeForm = `<form data-action="otp-verify" class="auth-form">
+      <div class="field"><label>6-digit code</label><input class="code-input" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" required /></div>
+      ${err}${inf}${go("Verify &amp; continue")}</form>
+    <p class="form-note center">Didn't get it? <button class="crumb link" data-action="otp-resend">Resend code</button> · check spam too</p>`;
+  const sendForm = `<form data-action="otp-send" class="auth-form">${email}${err}${inf}${go("Send me a code")}</form>
+    <p class="form-note center">No password needed — we'll email you a 6-digit code.</p>`;
+  const loginForm = `<form data-action="auth-submit" class="auth-form" autocomplete="on">${email}${pwField("Password", "password", "current-password", "Your password")}
+      <label class="check-row"><input type="checkbox" name="remember" ${localStorage.getItem(REMEMBER_KEY) === "0" ? "" : "checked"} /> Keep me signed in on this device</label>
+      ${err}${inf}${go("Log in")}</form>`;
+  const signupForm = `<form data-action="auth-submit" class="auth-form" autocomplete="on">
+      <div class="field"><label>Username</label><input name="username" type="text" autocomplete="username" placeholder="e.g. pooja" value="${esc(f.username)}" maxlength="20" required /></div>
+      ${email}${pwField("Password", "password", "new-password", "8+ chars, upper, lower, number")}
+      <div class="pw-meter" id="pw-meter"><i></i><i></i><i></i><i></i></div>
+      <ul class="pw-rules" id="pw-rules">${pwChecks("").map((c) => `<li>${c[0]}</li>`).join("")}</ul>
+      ${pwField("Confirm password", "confirm", "new-password", "Reset password")}
+      ${err}${inf}${go("Create account")}</form>
+    <p class="form-note center">We'll email a 6-digit code to verify it's really you.</p>`;
+  const social = `<div class="social-row">
+      <button type="button" class="btn btn-secondary" data-action="auth-google"><svg width="17" height="17" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.88 2.7-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.98v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.98A9 9 0 0 0 0 9c0 1.45.35 2.83.98 4.03l2.97-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .98 4.97l2.97 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg> Google</button>
+      <button type="button" class="btn btn-secondary" data-action="auth-github">${icon("github", 17, "fill:currentColor;stroke:none")} GitHub</button>
+    </div><div class="or-row"><span>or with email</span></div>`;
+  const body = verify ? codeForm : `${social}
+    ${su ? "" : `<div class="tab-row"><button type="button" class="chip ${tab === "password" ? "active" : ""}" data-action="auth-tab" data-tab="password">Password</button><button type="button" class="chip ${tab === "otp" ? "active" : ""}" data-action="auth-tab" data-tab="otp">Email code</button></div>`}
+    ${su ? signupForm : tab === "password" ? loginForm : (state.otpSent ? codeForm : sendForm)}`;
+  const title = verify || (!su && tab === "otp" && state.otpSent) ? "Check your email" : su ? "Create your account" : "Welcome back";
   return `
   <div class="modal-overlay" data-action="close-auth">
-    <div class="modal-panel" style="max-width:440px;">
+    <div class="modal-panel" style="max-width:440px;" role="dialog" aria-modal="true" aria-label="${title}">
       <div class="modal-head">
         <div class="modal-head-top">
-          <div class="modal-tags"><span class="badge badge-sun">🔒 Members only</span></div>
-          <button class="icon-btn" style="width:32px;height:32px;border-width:2px;flex-shrink:0;" data-action="close-auth">${icon("x", 15)}</button>
+          ${verify ? `<button class="crumb link" data-action="auth-mode" data-mode="signup">← Back</button>` : `<div class="auth-seg"><button class="${su ? "" : "on"}" data-action="auth-mode" data-mode="login">Log in</button><button class="${su ? "on" : ""}" data-action="auth-mode" data-mode="signup">Sign up</button></div>`}
+          <button class="icon-btn" style="width:32px;height:32px;border-width:2px;flex-shrink:0;" data-action="close-auth" aria-label="Close">${icon("x", 15)}</button>
         </div>
-        <h2 class="font-display modal-title">${su ? "Create your account" : "Welcome back"}</h2>
-        <p class="modal-sub">Log in once to download and save notes. We'll remember you on this device.</p>
+        <h2 class="font-display modal-title">${title}</h2>
+        <p class="modal-sub">${verify ? "Enter the code to finish setting up." : "Log in to download and save notes. Your password is never stored by us in the browser."}</p>
       </div>
-      <div class="modal-body">
-        <form data-action="auth-submit" style="display:flex;flex-direction:column;gap:14px;">
-          ${su ? `<div class="field"><label>Username</label><input name="username" type="text" placeholder="e.g. pooja_j" value="${esc(f.username)}" required /></div>` : ""}
-          <div class="field"><label>Email</label><input name="email" type="email" placeholder="you@college.edu" value="${esc(f.email)}" required /></div>
-          <div class="field"><label>Password</label><input name="password" type="password" placeholder="At least 6 characters" required /></div>
-          ${state.authError ? `<p class="form-note" style="color:#F0523A;">${esc(state.authError)}</p>` : ""}
-          ${state.authInfo ? `<p class="form-note" style="color:#1E8A5C;">${esc(state.authInfo)}</p>` : ""}
-          <button type="submit" class="btn btn-primary btn-lg btn-full">${su ? "Sign up" : "Log in"} ${icon("arrowRight", 16)}</button>
-        </form>
-        <p class="form-note" style="text-align:center;">
-          ${su ? "Already have an account?" : "New here?"}
-          <button class="crumb" data-action="switch-auth" style="font-weight:800;text-decoration:underline;">${su ? "Log in" : "Create an account"}</button>
-        </p>
-      </div>
+      <div class="modal-body">${body}</div>
     </div>
   </div>`;
 }
+
 function infoBlock(label, value) {
   return `<div><div class="info-label">${label}</div><div class="info-value">${esc(value)}</div></div>`;
 }
@@ -1333,40 +1489,42 @@ function selectHTML(label, options) {
 
 /* ============================== DASHBOARD / SAVED ============================== */
 
-function renderDashboardPage() {
-  const savedList = [...state.saved].map((id) => resourcesById[id]).filter(Boolean);
-  const recentList = state.recent.map((id) => resourcesById[id]).filter(Boolean);
+function avatarSVG(k) {
+  const g = k === "female";
+  return `<svg viewBox="0 0 100 100" aria-hidden="true" style="color:${g ? "#F4CFD6" : "#F7DDB5"}">${g ? '<path d="M24 46c0-24 12-34 26-34s26 10 26 34v30H24z" fill="#16110f"/><ellipse cx="50" cy="44" rx="15" ry="18" fill="currentColor"/>' : '<circle cx="50" cy="38" r="19" fill="#16110f"/>'}<path d="M10 100c2-25 18-36 40-36s38 11 40 36z" fill="#16110f"/></svg>`;
+}
+function renderProfilePage() {
+  if (!state.user) return `<div class="wrap" style="padding:60px 0;">${renderEmptyState("You're not logged in", "Log in to see your saved notes, downloads and account details.", "Log in", "open-auth")}</div>`;
+  const av = state.avatar, can = canUpload();
+  const recent = state.recent.map((id) => resourcesById[id]).filter(Boolean);
+  const dl = state.downloaded.map((id) => resourcesById[id]).filter(Boolean);
+  const opt = (k, l) => `<button class="pf-opt ${av === k ? "on" : ""}" data-action="pick-avatar" data-avatar="${k}"><span class="pf-mini">${avatarSVG(k)}</span>${l}</button>`;
+  const card = (cls, ic, title, sub, action, extra = "") => `<button class="pf-card ${cls}" data-action="${action}" ${extra}><span class="pf-ic">${icon(ic, 24)}</span><b class="font-display">${title}</b><span class="pf-sub">${sub}</span></button>`;
+  const who = state.editingName
+    ? `<form class="pf-edit" data-action="save-name"><input name="username" maxlength="20" value="${esc(userName())}" autocomplete="off" required aria-label="Your name" /><div class="pf-row"><button type="submit" class="pf-btn pf-main">Save</button><button type="button" class="pf-btn pf-line" data-action="cancel-name">Cancel</button></div></form>`
+    : `<h1 class="font-display pf-name">${esc(userName())}</h1><p class="pf-mail">${esc((state.user && state.user.email) || "")}</p>${state.isAdmin ? `<span class="pf-badge">Admin</span>` : ""}<button class="pf-btn pf-main" data-action="edit-name">Edit name</button>`;
   return `
-  <div class="wrap" style="padding:40px 0;">
-    <h1 class="font-display dash-title">Welcome back${state.user ? ", " + esc(userName()) : ""} 👋</h1>
-    <p class="dash-sub">B.E. CSE · Semester 3</p>
-    ${state.user ? `<button class="btn btn-secondary btn-sm" data-action="logout">Log out</button>` : `<button class="btn btn-primary btn-sm" data-action="open-auth">Log in</button>`}
-    <div class="grid dash-grid">
-      <button class="doodle-card dash-card" style="background:#FDE4E0;" data-action="go-browse">
-        ${icon("bookOpen", 20)}
-        <div class="font-display dash-card-title">Continue Studying</div>
-        <p class="dash-card-sub">Jump back into your subjects</p>
-      </button>
-      <button class="doodle-card dash-card" style="background:#FFF3D2;" data-action="set-page" data-page="saved">
-        ${icon("heart", 20)}
-        <div class="font-display dash-card-title">Saved Notes</div>
-        <p class="dash-card-sub">${savedList.length} resources saved</p>
-      </button>
-      <button class="doodle-card dash-card" style="background:#E1F5EC;" data-action="set-page" data-page="upload">
-        ${icon("upload", 20)}
-        <div class="font-display dash-card-title">Uploaded Notes</div>
-        <p class="dash-card-sub">Share something new</p>
-      </button>
-    </div>
-    ${state.downloaded.length ? `<div style="margin-top:40px;">
-      <div class="section-head">${icon("download", 16)}<h2 class="font-display">Your downloads</h2></div>
-      <div class="grid resource-grid">${state.downloaded.map((id) => resourcesById[id]).filter(Boolean).map((r) => renderResourceCard(r)).join("")}</div>
-    </div>` : ""}
-    <div style="margin-top:40px;">
-      <div class="section-head">${icon("clock", 16)}<h2 class="font-display">Recently viewed</h2></div>
-      ${recentList.length === 0 ? renderEmptyState("Nothing viewed yet", "Open a resource and it'll show up here.") :
-        `<div class="grid resource-grid">${recentList.map((r) => renderResourceCard(r)).join("")}</div>`}
-    </div>
+  <div class="wrap pf">
+    <aside class="pf-side">
+      <button class="pf-avatar ${av ? "has" : ""}" data-action="toggle-avatar" aria-label="Change avatar" aria-expanded="${state.avatarOpen}">${av ? avatarSVG(av) : `<span class="pf-ph">${icon("user", 44)}</span>`}<i class="pf-cam">${icon("edit" in ICONS ? "edit" : "user", 13)}</i></button>
+      ${state.avatarOpen ? `<div class="pf-pick">${opt("male", "Boy")}${opt("female", "Girl")}</div>` : ""}
+      ${who}
+      <button class="pf-btn pf-line pf-out" data-action="logout">${icon("logOut", 16)} Log out</button>
+    </aside>
+    <section class="pf-main-col">
+      <div class="pf-grid">
+        ${card("c1", "bookOpen", "Continue Studying", "Jump back into your subjects.", "go-browse")}
+        ${card("c2", "heart", "Saved Notes", `${state.saved.size} saved · notes you've hearted`, "set-page", 'data-page="saved"')}
+        ${can ? card("c3", "upload", "Uploaded Notes", state.isAdmin ? "Admin · upload anytime." : "Unlocked · share something new.", "set-page", 'data-page="upload"') : card("c3", "upload", "Uploaded Notes", "Enter the secret code to unlock.", "toggle-code")}
+        ${card("c4", "download", "Downloaded", `${dl.length} downloaded · files saved to your device`, "noop")}
+      </div>
+      ${state.codeOpen && !can ? `<form class="pf-panel pf-code" data-action="redeem-code"><div><b class="font-display">Contributor access</b><p>Ask the admin for the secret code. Access lasts 30 minutes.</p></div><input type="password" name="code" autocomplete="off" required placeholder="Secret code" aria-label="Secret code" /><button class="pf-btn pf-main" type="submit">Unlock</button></form>` : ""}
+      <div class="pf-panel">
+        <div class="section-head">${icon("clock", 18)}<h2 class="font-display">Recently Viewed</h2></div>
+        ${recent.length ? `<div class="grid resource-grid">${recent.map((r) => renderResourceCard(r)).join("")}</div>` : `<p class="pf-empty">Nothing viewed yet. Open a resource and it'll show up here.</p>`}
+      </div>
+      ${dl.length ? `<div class="pf-panel"><div class="section-head">${icon("download", 18)}<h2 class="font-display">Your downloads</h2></div><div class="grid resource-grid">${dl.map((r) => renderResourceCard(r)).join("")}</div></div>` : ""}
+    </section>
   </div>`;
 }
 
@@ -1417,7 +1575,7 @@ function renderFooter() {
           <button data-action="go-home">Home</button>
           <button data-action="go-browse">Courses</button>
           <button data-action="set-page" data-page="browse">Notes</button>
-          <button data-action="set-page" data-page="upload">Contribute</button>
+          <button data-action="set-page" data-page="profile">Profile</button>
         </div>
       </div>
       <div class="footer-col">
@@ -1438,11 +1596,11 @@ but then again, most good things are.</span>
         <div class="footer-about">
           <span> </span>
 <span class="eyebrow">Connect</span>
-          <span>Have any Issues Or Want to appreciate Us..😉Feel Free to shoot us a Mail or Msg using Our Socials </span>
+          <span>Have any Issues Or Want to appreciate ..😉Feel Free to shoot us a Mail or Msg using Our Socials </span>
 
 <span>Give a Star⭐ If You Like In Github</span>
         <div class="footer-social">
-          <a class="social-btn" href="mailto:poojajohnsonmenaka@gmail.com" aria-label="Email">${icon("email", 17)}</a>
+          <a class="social-btn" href="mailto:lumosbruh@gmail.com" aria-label="Email">${icon("email", 17)}</a>
           <a class="social-btn" href="https://github.com/percyjacksonn/" target="_blank" rel="noopener noreferrer" aria-label="GitHub">${icon("github", 17)}</a>
           <a class="social-btn" href="https://www.linkedin.com/in/pooja-johnson-/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">${icon("linkedin", 17)}</a>
         </div>
@@ -1462,8 +1620,8 @@ function render() {
   if (state.page === "home") pageHTML = renderHomePage();
   else if (state.page === "browse") pageHTML = renderBrowsePage();
   else if (state.page === "upload") pageHTML = renderUploadPage();
-  else if (state.page === "dashboard") pageHTML = renderDashboardPage();
   else if (state.page === "saved") pageHTML = renderSavedPage();
+  else if (state.page === "profile") pageHTML = renderProfilePage();
 
   const html = `
     ${renderHeader()}
@@ -1534,15 +1692,30 @@ document.addEventListener("click", (e) => {
     case "open-auth": setState({ authOpen: true, authMode: "login", authError: "", authInfo: "", pending: null }); break;
     case "close-auth": {
       if (el.classList.contains("modal-overlay") && e.target !== el) break;
-      setState({ authOpen: false, pending: null, authError: "", authInfo: "" });
+      setState({ authOpen: false, pending: null, authError: "", authInfo: "", authStep: "form", otpSent: false });
       break;
     }
     case "switch-auth": setState({ authMode: state.authMode === "login" ? "signup" : "login", authError: "", authInfo: "" }); break;
+    case "auth-tab": setState({ authTab: el.getAttribute("data-tab"), authError: "", authInfo: "", otpSent: false }); break;
+    case "auth-google": loginWithGoogle(); break;
+    case "auth-github": oauth("github"); break;
+    case "auth-mode": setState({ authMode: el.getAttribute("data-mode"), authStep: "form", authTab: "password", otpSent: false, authError: "", authInfo: "" }); break;
+    case "toggle-pw": { const i = el.parentElement.querySelector("input"); i.type = i.type === "password" ? "text" : "password"; break; }
+    case "otp-resend": resendCode(); break;
     case "logout": logout(); break;
+    case "toggle-avatar": setState({ avatarOpen: !state.avatarOpen }); break;
+    case "pick-avatar": pickAvatar(el.getAttribute("data-avatar")); break;
+    case "edit-name": setState({ editingName: true }); break;
+    case "cancel-name": setState({ editingName: false }); break;
+    case "toggle-code": setState({ codeOpen: !state.codeOpen }); break;
+    case "goto-profile": setPage("profile"); break;
+    case "noop": break;
+    case "profile-tab": setState({ profileTab: el.getAttribute("data-tab") }); break;
     case "toggle-mobile-menu": setState({ mobileMenuOpen: !state.mobileMenuOpen }); break;
     case "search-goto-subject": goToSubjectFromSearch(el.getAttribute("data-id")); break;
     case "search-goto-resource": goToResourceFromSearch(el.getAttribute("data-id")); break;
     case "goto-upload": setPage("upload"); break;
+    case "view-upload": { const u = subjectsById[lastUpload.subjectId]; Object.assign(state, { page: "browse", unitFilter: "all", nav: { deptId: u.deptId, year: u.year, sem: u.sem, subjectId: u.id, category: lastUpload.type, teacherId: null } }); render(); scrollTop(); break; }
     case "upload-another": uploadSubmitted = false; uploadedFile = null; render(); break;
     default: break;
   }
@@ -1588,82 +1761,80 @@ document.addEventListener("drop", (e) => {
   }
 });
 
-// ==== CHANGED: submit handler now actually uploads the file to Supabase Storage ====
+document.addEventListener("change", (e) => {
+  const k = e.target.getAttribute && e.target.getAttribute("data-up");
+  if (!k) return;
+  upForm[k] = e.target.value;
+  if (["dept", "year", "sem"].includes(k)) { upForm.subject = ""; render(); }
+});
+document.addEventListener("input", (e) => {
+  const k = e.target.getAttribute && e.target.getAttribute("data-up");
+  if (k && e.target.tagName === "INPUT") upForm[k] = e.target.value;
+});
 document.addEventListener("submit", async (e) => {
   const form = e.target.closest('[data-action="submit-upload"]');
   if (!form) return;
   e.preventDefault();
-
-  if (!uploadedFile) {
-    showToast("Please choose a PDF file first");
-    return;
-  }
-
-  const submitBtn = form.querySelector('button[type="submit"]');
-  const originalLabel = submitBtn ? submitBtn.innerHTML : "";
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Uploading..."; }
-
-  // Build a unique, safe path inside the bucket.
-  // Everything goes in an "uploads/" folder for now so it's easy to find
-  // and move into REAL_RESOURCES once you've reviewed it.
-  const cleanName = uploadedFile.name.replace(/\s+/g, "_");
-  const filePath = `uploads/${Date.now()}_${cleanName}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from(SUPABASE_BUCKET)
-    .upload(filePath, uploadedFile);
-
-  if (uploadError) {
-    showToast("Upload failed: " + uploadError.message);
-    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = originalLabel; }
-    return;
-  }
-
-  // ==== OPTIONAL: SAVE METADATA TO A DATABASE TABLE ====
-  // Right now the file lands in Storage but nothing records who uploaded it,
-  // for which subject, etc. To track that, create a table once in the
-  // Supabase SQL editor:
-  //
-  //   create table files (
-  //     id uuid primary key default gen_random_uuid(),
-  //     file_name text not null,
-  //     file_path text not null,
-  //     file_url text not null,
-  //     department text, year text, semester text,
-  //     subject text, teacher text, unit text, resource_type text,
-  //     title text, description text,
-  //     uploaded_by text,
-  //     status text default 'pending', -- for moderation
-  //     created_at timestamp default now()
-  //   );
-  //
-  // Then uncomment this block to save the form's details alongside the file:
-  //
-  // const inputs = form.querySelectorAll("input[type=text], select, textarea");
-  // const [contributor, subjectField, teacherField] = form.querySelectorAll('input[type="text"]');
-  // await supabase.from("files").insert([{
-  //   file_name: cleanName,
-  //   file_path: filePath,
-  //   file_url: getPublicFileUrl(filePath),
-  //   uploaded_by: contributor ? contributor.value : null,
-  //   status: "pending",
-  // }]);
-
-  uploadedFile = null;
-  uploadSubmitted = true;
-  showToast("Upload received — thank you!");
-  render();
+  const f = upForm;
+  if (!f.subject) return showToast("Choose a subject");
+  if (!uploadedFile) return showToast("Please choose a PDF first");
+  if (uploadedFile.size > 25 * 1024 * 1024) return showToast("PDF must be under 25 MB");
+  const btn = form.querySelector('button[type="submit"]');
+  if (!/\.pdf$/i.test(uploadedFile.name)) return showToast("Only PDF files are allowed");
+  if (!canUpload()) return showToast("Contributor access expired. Unlock it again from your profile.");
+  const label = btn.innerHTML; btn.disabled = true; btn.textContent = "Uploading...";
+  const fail = (m) => { showToast(m); btn.disabled = false; btn.innerHTML = label; };
+  const path = `${f.dept}/y${f.year}-s${f.sem}/${f.type}/${Date.now()}_${uploadedFile.name.replace(/[^\w.-]+/g, "_").slice(-80)}`;
+  const up = await supabase.storage.from(SUPABASE_BUCKET).upload(path, uploadedFile, { contentType: "application/pdf" });
+  if (up.error) return fail("Upload failed: " + up.error.message);
+  const ins = await supabase.from("resources").insert({ subject_id: f.subject, type: f.type, unit: f.unit ? Number(f.unit) : null, teacher: userName(), title: f.title.trim(), file_path: path, uploaded_by: userName() }).select().single();
+  if (ins.error) { await supabase.storage.from(SUPABASE_BUCKET).remove([path]); return fail("Could not save: " + ins.error.message); }
+  addDbResource(ins.data);
+  lastUpload = { subjectId: f.subject, type: f.type };
+  uploadedFile = null; f.title = ""; uploadSubmitted = true;
+  render(); showToast("Uploaded!");
 });
 
 document.addEventListener("submit", (e) => {
-  const form = e.target.closest('[data-action="auth-submit"]');
-  if (!form) return;
-  e.preventDefault();
-  submitAuth(form);
+  const authForm = e.target.closest('[data-action="auth-submit"]');
+  const otpSendForm = e.target.closest('[data-action="otp-send"]');
+  const otpVerifyForm = e.target.closest('[data-action="otp-verify"]');
+  if (authForm) { e.preventDefault(); submitAuth(authForm); }
+  else if (otpSendForm) { e.preventDefault(); sendOtp(otpSendForm); }
+  else if (otpVerifyForm) { e.preventDefault(); verifyOtp(otpVerifyForm); }
+});
+
+/* ============================== PROFILE ACTIONS ============================== */
+async function pickAvatar(k) {
+  if (!state.user || !["male", "female"].includes(k)) return;
+  state.avatar = k; state.avatarOpen = false; render();
+  const { error } = await supabase.from("profiles").update({ avatar: k }).eq("id", state.user.id);
+  if (error) showToast("Couldn't save your avatar");
+}
+async function saveName(form) {
+  const v = form.elements.username.value.trim();
+  if (!/^[\w .-]{3,20}$/.test(v)) return showToast("Use 3-20 letters, numbers, spaces, . _ or -");
+  const { error } = await supabase.from("profiles").update({ username: v }).eq("id", state.user.id);
+  if (error) return showToast(error.code === "23505" ? "That name is already taken" : "Couldn't save your name");
+  await supabase.auth.updateUser({ data: { username: v } });
+  state.username = v; state.editingName = false; render(); showToast("Name updated");
+}
+async function redeemCode(form) {
+  const code = form.elements.code.value; form.elements.code.value = "";
+  const { data: ok, error } = await supabase.rpc("redeem_upload_code", { code });   // checked on the server only
+  if (error) return showToast(error.message);
+  if (!ok) return showToast("Wrong code. Ask the admin.");
+  state.uploadUntil = Date.now() + 30 * 60000; state.codeOpen = false; render();
+  showToast("Contributor access unlocked for 30 minutes");
+}
+document.addEventListener("submit", (e) => {
+  const n = e.target.closest('[data-action="save-name"]'), c = e.target.closest('[data-action="redeem-code"]');
+  if (n) { e.preventDefault(); saveName(n); } else if (c) { e.preventDefault(); redeemCode(c); }
 });
 
 /* ============================== INIT ============================== */
 render();
+resourcesReady = loadUploadedResources();
 // Supabase keeps the login in the browser, so returning students are recognised
 // automatically (this fires once on page load with the saved session, if any).
 if (supabase) {
@@ -1674,3 +1845,12 @@ if (supabase) {
     setTimeout(async () => { await loadUserData(); render(); }, 0);
   });
 }
+// live password-strength meter (updates in place so typing never loses focus)
+document.addEventListener("input", (e) => {
+  const t = e.target;
+  if (!t || t.name !== "password" || state.authMode !== "signup") return;
+  const checks = pwChecks(t.value), score = checks.filter((c) => c[1]).length + (t.value.length >= 12 ? 1 : 0);
+  const lvl = COMMON_PW.includes(t.value.toLowerCase()) ? 0 : Math.min(4, score);
+  document.querySelectorAll("#pw-meter i").forEach((b, i) => { b.className = i < lvl ? "l" + lvl : ""; });
+  document.querySelectorAll("#pw-rules li").forEach((li, i) => li.classList.toggle("ok", checks[i][1]));
+});
