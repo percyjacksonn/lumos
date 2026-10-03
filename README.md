@@ -1,156 +1,193 @@
- <div align="center"><img src="https://capsule-render.vercel.app/api?type=waving&color=F0523A&height=190&section=header&text=LUMOS&fontSize=60&fontColor=ffffff&animation=fadeIn&fontAlignY=35" width="100%"/>✨ Lumos
+<div align="center">
 
-📚 A Study Material Sharing Portal for Students
+<img src="assets/lumos-hero.svg" width="100%" alt="Lumos - Find it. Save it. Study it."/>
+
+### 📚 A study-material sharing portal, built by students for students
 
 <p>
-  <b>Find it.</b> &nbsp;•&nbsp;
-  <b>Save it.</b> &nbsp;•&nbsp;
-  <b>Study it.</b> 🚀
-</p><p>
-  <img src="https://img.shields.io/badge/Status-In%20Development-orange?style=for-the-badge"/>
-  <img src="https://img.shields.io/badge/Project-2nd%20Year%20CSE-blue?style=for-the-badge"/>
-  <img src="https://img.shields.io/badge/Platform-Web-purple?style=for-the-badge"/>
-</p></div>
+  <img src="https://img.shields.io/badge/Status-In%20Development-F0523A?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Project-2nd%20Year%20CSE-3AACFF?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Platform-Web-9b6df0?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Hosting-Free-2FAE73?style=for-the-badge"/>
+</p>
 
-<br>
-Lumos is a student-focused study material sharing portal designed to make academic resources easier to discover, access and organize.
-
-Instead of searching through scattered WhatsApp messages, folders and different links, Lumos aims to bring useful college study resources into one simple place:
-
-📚 Notes
-📝 Previous Year Questions
-⭐ Important Questions
-📋 Assignments
-🧪 Lab Materials
-📖 Reference Resources
-📑 Syllabus
-📦 Other academic resources
-
-💡 The Idea
-
-«Finding your study material shouldn't become a study session itself. 😭»
-
-College students constantly receive PDFs, notes, question papers and other resources from different places.
-<br>
-Lumos is built around a simple idea:
-
-        📚 FIND
-          ↓
-       🔎 SEARCH
-          ↓
-       📄 VIEW
-          ↓
-       💾 SAVE
-          ↓
-      🎓 STUDY
-
-
-
-
-
-🧭 How Lumos Works
-
-        01 — Pick your path 🧭
-
-Choose the department / academic area you need.
-
-                 ↓
-
-     02 — Choose what you need 📚
-
-Browse categories such as notes, PYQs, assignments, lab materials and more.
-
-                  ↓
-
-        03 — View or save 📄
-
-Open the resource and keep useful material available for later.
-
-
-
-🛠️ Tech Stack
-
-<div align="center"><img src="https://skillicons.dev/icons?i=html,css,js,git,github" /><br><br>
-
-<img src="https://img.shields.io/badge/Supabase-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white"/>
-<img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black"/>
-<img src="https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white"/>
-<img src="https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white"/>
-<img src="https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white"/>
-<img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white"/></div>
-<hr>
-🎬 Project Preview
-
-<div align="center"><!-- Replace this GIF with your own project demo GIF when you have one -->LUMOS👾
+<a href="https://percyjacksonn.github.io/lumos-/"><b>🌐 Open Lumos</b></a>
+&nbsp;•&nbsp;
+<a href="#-contribute-to-lumos"><b>⬆️ How to contribute</b></a>
+&nbsp;•&nbsp;
+<a href="#-set-up-your-own-lumos"><b>🛠️ Run your own</b></a>
 
 </div>
 
-<div align="center"><img src="images/home.png" width="85%" alt="Lumos Home Page"/><br><br>
+<br>
 
-<img src="images/browse.png" width="85%" alt="Lumos Browse Page"/><br><br>
+> _"Finding your study material shouldn't become a study session itself."_ 😭
 
-<img src="images/dashboard.png" width="85%" alt="Lumos Dashboard"/></div>
+Notes, question papers and lab manuals end up scattered across WhatsApp groups, Google Classroom and random drives.
+**Lumos puts them in one organised place**, sorted by **department → year → semester → subject**.
 
-☁️ Cloud & Storage
+<div align="center">
 
-Lumos uses Supabase for cloud-based resource storage.
+`🔎 FIND` &nbsp;➜&nbsp; `🧭 BROWSE` &nbsp;➜&nbsp; `📄 PREVIEW` &nbsp;➜&nbsp; `❤️ SAVE` &nbsp;➜&nbsp; `🎓 STUDY`
 
-Academic PDF resources can be connected to the portal instead of being kept only inside local folders.
+</div>
 
-               🌐 LUMOS
-                    │
-                    ▼
-             📚 Resource UI
-                    │
-                    ▼
-              ☁️ Supabase
-                    │
-                    ▼
-               📄 PDF Files
+---
 
-🚧 Lumos is actively being developed.
+## ✨ What you can do
 
-The project is still evolving as new features, resources and improvements are added.
+| | |
+|---|---|
+| 🧭 **Browse by path** | Pick your department, year, semester and subject. Every level is one tap. |
+| 🗂️ **Seven categories** | Notes · Previous Year Papers · Important Questions · Assignments · Lab Materials · Syllabus · Reference |
+| 🔢 **Unit-wise notes** | Notes, Important Questions and Assignments are grouped by **Unit 1-8**. Lab materials simply say *Lab Materials*. |
+| 🔎 **Smart search** | Type `DBMS` and find *Database Management Systems*. Search works on names, course codes and initials. |
+| 📄 **Preview in the browser** | Open the PDF right on the page, or download it. |
+| ❤️ **Save for later** | Heart any resource. Your saved notes and download history follow your account. |
+| 👤 **Real accounts** | Sign up with email and password, or log in with a 6-digit email code. Pick an avatar and a display name. You stay signed in on refresh. |
+| ⬆️ **Contribution portal** | Authorised contributors upload PDFs. The admin reviews them before they go live. |
 
+---
 
-🧑‍💻 Run Locally
+## ⬆️ Contribute to Lumos
 
-Want to explore Lumos on your own machine?
+<div align="center">
+<img src="assets/lumos-flow.svg" width="100%" alt="Log in, enter the secret code, upload a PDF, the admin reviews it, then it becomes a live card"/>
+</div>
 
-        1. Clone the repository
+**Only the Lumos admin and people who have the secret code can contribute.** Anyone can open the Contribute page and read how it works. Uploading needs a login and the code.
 
-      git clone https://github.com/percyjacksonn/lumos-.git
+- 🔐 **Secret code, checked on the server.** The code is never in the website files. Supabase stores only a scrambled (bcrypt) version of it, and the check runs inside the database.
+- 🚫 **3 tries, then a 30-minute block.** The block is stored in the database, so clearing the browser, switching browsers or editing the JavaScript doesn't reset it. A repeat-offender alert email goes to the admin.
+- 📥 **Uploads wait for review.** A contribution is saved as *pending*. The admin gets an email, previews the file, then **approves, rejects or deletes** it.
+- 🃏 **Approved files become normal Lumos cards**, with the same View, Download and Save buttons as everything else. They show the subject, unit (when it applies), type, semester and department.
+- ✅ **Checked twice.** The page validates the form, and the database re-checks everything: department, semester, unit, file name and who is uploading.
 
-        2. Open the project
+```mermaid
+flowchart LR
+    A([Visitor opens Contribute]) --> B{Logged in?}
+    B -- No --> C[Log in or sign up]
+    C --> D
+    B -- Yes --> D{Secret code correct?}
+    D -- "Wrong, 3rd time" --> X[Blocked for 30 min + admin email]
+    D -- Wrong --> D
+    D -- Correct --> E[Upload PDF + details]
+    E --> F[(Supabase Storage + resources table)]
+    F --> G{Admin review}
+    G -- Approve --> H([Live Lumos card])
+    G -- Reject --> I([Hidden])
+```
 
-            cd lumos
+---
 
-        3. Run it
+## 🔒 How it is kept safe
 
-Because Lumos is a frontend web project, you can open the main HTML file in your browser or use a local development server such as VS Code Live Server.
+| Area | What protects it |
+|---|---|
+| **Secret code** | Stored only as a bcrypt hash in a table the browser can't read. Never in the repo. |
+| **Who can approve or delete** | Enforced by Supabase **Row Level Security**, not by hiding buttons. A normal user calling the API directly is refused. |
+| **Uploads** | Only into your own folder, **PDF only**, **25 MB max**, no overwriting existing files. |
+| **Pending files** | Not listed and not downloadable through the site until the admin approves them. |
+| **Passwords** | Handled entirely by Supabase Auth. Lumos never stores them. |
+| **Emails** | Sent from the database with a key kept in Supabase. No code or password is ever emailed. |
 
+---
 
-🍴 Fork Lumos
+## 🛠️ Tech stack
 
-Want to experiment with the project?
+<div align="center">
 
-You can fork this repository, make your own changes and build on top of it.
+<img src="https://skillicons.dev/icons?i=html,css,js,git,github" /><br><br>
 
+<img src="https://img.shields.io/badge/Supabase-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white"/>
+<img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white"/>
+<img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black"/>
+<img src="https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white"/>
+<img src="https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white"/>
+<img src="https://img.shields.io/badge/GitHub%20Pages-181717?style=for-the-badge&logo=github&logoColor=white"/>
 
-🤝 Contributing<br>
-*
-Found something that could be better?
-*
-Pull requests and constructive suggestions are welcome.
+</div>
 
+```mermaid
+flowchart TD
+    U[🌐 Browser<br/>HTML · CSS · JavaScript] -->|login, data| S[(☁️ Supabase)]
+    S --> A[Auth<br/>accounts + sessions]
+    S --> P[(Postgres<br/>resources · profiles · saved)]
+    S --> B[Storage<br/>study-materials PDFs]
+    P -->|trigger| M[✉️ Email alert to admin]
+```
 
-//🌱 Learning While Building//
+No framework and no build step: plain HTML, CSS and JavaScript talking to Supabase, hosted free on GitHub Pages.
 
-Lumos is also a learning project.
-The goal isn't just to make a website.
+---
 
-It's to learn by actually building one.
+## 🎬 Preview
 
+<div align="center">
 
-<br><img src="https://capsule-render.vercel.app/api?type=waving&color=F0523A&height=120&section=footer" width="100%"/></div>           
-            
+<img src="images/home.png" width="85%" alt="Lumos home page"/><br><br>
+<img src="images/browse.png" width="85%" alt="Lumos browse page"/><br><br>
+<img src="images/dashboard.png" width="85%" alt="Lumos profile page"/>
+
+</div>
+
+---
+
+## 📁 Project files
+
+```
+lumos-/
+├── index.html        the page shell
+├── style.css         the whole look: doodle cards, colours, animations
+├── script.js         browsing, search, login, profile, saved, downloads
+├── contribute.js     the contribution portal + admin review page
+└── images/           screenshots used in this README
+```
+
+---
+
+## 🛠️ Set up your own Lumos
+
+<details>
+<summary><b>Click to open the steps</b> (about 20 minutes, all free)</summary>
+
+<br>
+
+1. **Clone it**
+   ```bash
+   git clone https://github.com/percyjacksonn/lumos-.git
+   cd lumos-
+   ```
+2. **Create a free project** at [supabase.com](https://supabase.com). Under *Project Settings → API* copy the project URL and the public (publishable) key.
+3. **Paste them into `script.js`** at the top (`supabaseUrl` and `supabaseKey`). Never paste a `service_role` key into the website.
+4. **Create a bucket** called `study-materials` in *Storage* and set it to **Public**.
+5. **Run the database setup** in *SQL Editor → Create a new snippet*, one file per snippet and in order: the base setup (profiles, saved, downloads), then the contribution setup, then your secrets file (access code, your admin email, email key).
+6. **Turn on email alerts (optional)** with a free [Resend](https://resend.com) key.
+7. **Open `index.html`** with VS Code Live Server, or publish the repo with *Settings → Pages*.
+
+> 🔑 Keep the file that holds your access code and email key **out of GitHub**.
+
+</details>
+
+---
+
+## 🍴 Fork & improve
+
+Want to experiment? Fork the repo and build on top of it. Found a bug or have an idea? Open an issue or send a pull request. Pull requests and kind suggestions are always welcome. 💛
+
+---
+
+## 🌱 Learning while building
+
+Lumos started as a second-year mini project. The plan was simple, and then it grew into the little details: how the layout feels, how cards respond, how safe the uploads are.
+It's still a work in progress, but then again, most good things are.
+
+<div align="center">
+
+**Made with 💛 by Pooja and the team**
+
+<sub>⭐ If Lumos helped you study, give it a star.</sub>
+
+</div>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=F0523A&height=120&section=footer" width="100%"/>
