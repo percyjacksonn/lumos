@@ -810,15 +810,6 @@ async function logout() {
   showToast("Logged out");
   setState({ page: "home" });
 }
-// Must match an entry in Supabase -> Authentication -> URL Configuration -> Redirect URLs
-const SITE_URL = window.location.origin + window.location.pathname.replace(/index\.html$/, "");
-async function oauth(provider) {
-  if (provider !== "google") return;
-  if (!supabase) { showToast("Login is unavailable right now"); return; }
-  const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo: SITE_URL, queryParams: { prompt: "select_account" } } });
-  if (error) { console.error(error); authBad("Google sign-in couldn't start. Please try again."); }
-}
-const loginWithGoogle = () => oauth("google");
 
 async function toggleSave(id) {
   if (!requireLogin(() => toggleSave(id))) return;
@@ -1395,11 +1386,7 @@ function renderAuthModal() {
       ${pwField("Confirm password", "confirm", "new-password", "Reset password")}
       ${err}${inf}${go("Create account")}</form>
     <p class="form-note center">We'll email a 6-digit code to verify it's really you.</p>`;
-  const social = `<div class="social-row">
-      <button type="button" class="btn btn-secondary" data-action="auth-google"><svg width="17" height="17" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.88 2.7-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.98v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.98A9 9 0 0 0 0 9c0 1.45.35 2.83.98 4.03l2.97-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .98 4.97l2.97 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg> Google</button>
-    </div><div class="or-row"><span>or with email</span></div>`;
-  const body = verify ? codeForm : `${social}
-    ${su ? "" : `<div class="tab-row"><button type="button" class="chip ${tab === "password" ? "active" : ""}" data-action="auth-tab" data-tab="password">Password</button><button type="button" class="chip ${tab === "otp" ? "active" : ""}" data-action="auth-tab" data-tab="otp">Email code</button></div>`}
+  const body = verify ? codeForm : `    ${su ? "" : `<div class="tab-row"><button type="button" class="chip ${tab === "password" ? "active" : ""}" data-action="auth-tab" data-tab="password">Password</button><button type="button" class="chip ${tab === "otp" ? "active" : ""}" data-action="auth-tab" data-tab="otp">Email code</button></div>`}
     ${su ? signupForm : tab === "password" ? loginForm : (state.otpSent ? codeForm : sendForm)}`;
   const title = verify || (!su && tab === "otp" && state.otpSent) ? "Check your email" : su ? "Create your account" : "Welcome back";
   return `
@@ -1630,7 +1617,6 @@ document.addEventListener("click", (e) => {
     }
     case "switch-auth": setState({ authMode: state.authMode === "login" ? "signup" : "login", authError: "", authInfo: "" }); break;
     case "auth-tab": setState({ authTab: el.getAttribute("data-tab"), authError: "", authInfo: "", otpSent: false }); break;
-    case "auth-google": loginWithGoogle(); break;
     case "auth-mode": setState({ authMode: el.getAttribute("data-mode"), authStep: "form", authTab: "password", otpSent: false, authError: "", authInfo: "" }); break;
     case "toggle-pw": { const i = el.parentElement.querySelector("input"); i.type = i.type === "password" ? "text" : "password"; break; }
     case "otp-resend": resendCode(); break;
@@ -1671,13 +1657,13 @@ async function pickAvatar(k) {
   if (!state.user || !["male", "female"].includes(k)) return;
   state.avatar = k; state.avatarOpen = false; render();
   const { error } = await supabase.from("profiles").update({ avatar: k }).eq("id", state.user.id);
-  if (error) showToast("Couldn't save your avatar");
+  if (error) { console.error(error); showToast("Couldn't save your avatar"); }
 }
 async function saveName(form) {
   const v = form.elements.username.value.trim();
   if (!/^[\w .-]{3,20}$/.test(v)) return showToast("Use 3-20 letters, numbers, spaces, . _ or -");
   const { error } = await supabase.from("profiles").update({ username: v }).eq("id", state.user.id);
-  if (error) return showToast(error.code === "23505" ? "That name is already taken" : "Couldn't save your name");
+  if (error) { console.error(error); return showToast(error.code === "23505" ? "That name is already taken" : "Couldn't save your name"); }
   await supabase.auth.updateUser({ data: { username: v } });
   state.username = v; state.editingName = false; render(); showToast("Name updated");
 }
@@ -1687,14 +1673,6 @@ document.addEventListener("submit", (e) => {
 });
 
 /* ============================== INIT ============================== */
-(function oauthErrorFromUrl() {
-  const p = new URLSearchParams(window.location.search + "&" + window.location.hash.replace(/^#/, ""));
-  const d = p.get("error_description") || p.get("error");
-  if (!d) return;
-  console.error("OAuth error:", d);
-  history.replaceState(null, "", window.location.pathname);
-  setTimeout(() => showToast("Google sign-in couldn't be completed. Please try again."), 400);
-})();
 render();
 resourcesReady = loadUploadedResources();
 // Supabase keeps the login in the browser, so returning students are recognised
