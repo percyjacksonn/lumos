@@ -19,7 +19,7 @@
   const TOO_MANY = "Too many failed attempts. Please try again later.";
 
   const form = { type: "teacher-notes", dept: "", year: "", sem: "", subject: "", unit: "", name: "", title: "", desc: "" };
-  const ui = { file: null, busy: false, progress: 0, error: "", checking: false, codeMsg: "", blockedUntil: 0, done: false, remaining: null, shake: false, here: false, enter: false };
+  const ui = { last: null, file: null, busy: false, progress: 0, error: "", checking: false, codeMsg: "", blockedUntil: 0, done: false, remaining: null, shake: false, here: false, enter: false };
   const adm = { filter: "pending", list: [], loaded: false, loading: false };
 
   const opt = (v, l, cur) => `<option value="${esc(v)}" ${String(cur) === String(v) ? "selected" : ""}>${esc(l)}</option>`;
@@ -63,7 +63,7 @@
           <button type="button" class="pw-eye" data-action="toggle-pw" aria-label="Show or hide the code">${icon("eye", 16)}</button></div></div>
         <div class="c-pips" aria-label="${left} attempts remaining">${pips}<span>${left} attempt${left === 1 ? "" : "s"} left</span></div>
         <button class="btn btn-primary btn-lg btn-full" type="submit" ${blocked || ui.checking ? "disabled" : ""}>${ui.checking ? '<i class="c-spin"></i> Checking...' : "Unlock uploads " + icon("arrowRight", 16)}</button>
-        <p class="form-note c-msg ${blocked ? "c-blocked" : "c-err"}" role="alert" aria-live="polite">${ui.codeMsg ? esc(ui.codeMsg) : ""}${blocked ? ` <b id="c-count" class="font-display"></b>` : ""}</p>
+        <p class="form-note c-msg ${blocked ? "c-blocked" : "c-err"}" role="alert" aria-live="polite">${ui.codeMsg ? esc(ui.codeMsg) : ""}${blocked ? ` <b id="c-count" class="font-display">${mmss(ui.blockedUntil - Date.now())}</b>` : ""}</p>
       </form>`;
   }
 
@@ -74,8 +74,9 @@
         <div class="c-burst" aria-hidden="true">${CONFETTI.map((c, i) => `<i style="--a:${i * 36}deg;--c:${c};--d:${(i % 3) * 60}ms"></i>`).join("")}</div>
         <div class="success-icon c-check">${icon("check", 34, "color:#1E8A5C")}</div>
         <h1 class="font-display">Contribution submitted successfully.</h1>
-        <p>Thank you! A moderator will review it, and it goes live once approved.</p>
-        <div class="success-actions"><button class="btn btn-primary" data-action="c-again">Upload another</button>
+        <p>${ui.last && ui.last.live ? "It's live now. You'll find it under its subject." : "Thank you! The admin will review it, and it appears as a card once approved."}</p>
+        <div class="success-actions">${ui.last && ui.last.live ? `<button class="btn btn-primary" data-action="c-view-upload">See it on Lumos</button>` : ""}
+        <button class="btn ${ui.last && ui.last.live ? "btn-secondary" : "btn-primary"}" data-action="c-again">Upload another</button>
         <button class="btn btn-secondary" data-action="go-browse">Browse resources</button></div>
       </div>`;
 
@@ -105,8 +106,8 @@
            <div class="c-row"><button class="btn btn-primary btn-lg" data-action="c-login">Log in</button>
            <button class="btn btn-secondary btn-lg" data-action="c-signup">Sign up</button></div></div>`
       : locked ? codePanel(blocked)
-      : `<div class="c-unlocked"><span class="c-open">${lockSVG(true)}</span><div><b class="font-display">Secret code accepted</b>
-           <span class="c-muted">You can upload now · access ends in <b id="c-left" class="font-display"></b></span></div></div>`;
+      : `<div class="c-unlocked"><span class="c-open">${lockSVG(true)}</span><div><b class="font-display">${state.isAdmin ? "Admin access" : "Secret code accepted"}</b>
+           <span class="c-muted">${state.isAdmin ? "You're the Lumos admin, so no code is needed." : `You can upload now · access ends in <b id="c-left" class="font-display">${mmss(state.uploadUntil - Date.now())}</b>`}</span></div></div>`;
 
     const typeChips = TYPES.map((t) => `<button type="button" class="c-chip ${form.type === t.key ? "on" : ""}" data-action="c-type" data-v="${t.key}" aria-pressed="${form.type === t.key}"><span>${TYPE_EMOJI[t.key]}</span>${t.label}</button>`).join("");
     const unitChips = unitApplies(form.type) ? `
@@ -218,8 +219,11 @@
         unit: unitApplies(form.type) ? Number(form.unit) : null,
         title: form.title.trim(), description: form.desc.trim() || null,
         contributor_name: name, teacher: name, uploaded_by: name, file_path: path,
-      }).select("id").single();   // admin email is sent by a database trigger
+      }).select("*").single();   // admin email is sent by a database trigger
       if (error) throw error;
+      const live = data.status === "approved";                 // admin uploads skip the review queue
+      if (live) addDbResource(data);                           // card appears immediately, no refresh needed
+      ui.last = { subjectId: data.subject_id, type: data.type, live };
       Object.assign(form, { title: "", desc: "", unit: "" }); ui.file = null; ui.done = true;
     } catch (e) {
       console.error(e);
@@ -271,7 +275,7 @@
           <div class="res-meta">${esc(r.subject_name || r.subject_id)} · ${esc(t)}${r.unit ? " · Unit " + r.unit : ""}</div>
           <div class="res-meta">${esc((r.department || "").toUpperCase())} · Sem ${esc(r.semester)} · by ${esc(r.contributor_name || "—")} (${esc(r.contributor_email || "—")})</div>
           ${r.description ? `<div class="res-meta2">${esc(r.description)}</div>` : ""}</div>
-        <div class="c-row">${url ? `<a class="btn btn-secondary btn-sm" href="${esc(url)}" target="_blank" rel="noopener">View</a>` : ""}
+        <div class="c-row"><button class="btn btn-secondary btn-sm" data-action="c-adm-view" data-id="${id}">View</button>
           ${r.status !== "approved" ? `<button class="btn btn-primary btn-sm" data-action="c-adm-approve" data-id="${id}">Approve</button>` : ""}
           ${r.status !== "rejected" ? `<button class="btn btn-secondary btn-sm" data-action="c-adm-reject" data-id="${id}">Reject</button>` : ""}
           <button class="btn btn-secondary btn-sm" data-action="c-adm-delete" data-id="${id}">Delete</button></div></div>`;
@@ -285,6 +289,14 @@
     if (error) { console.error(error); showToast("Couldn't load contributions."); }
     adm.list = data || []; adm.loaded = true; adm.loading = false;
     if (state.page === "admin") render();
+  }
+  async function viewAdminFile(id) {
+    const row = adm.list.find((r) => String(r.id) === id); if (!row) return;
+    const win = window.open("", "_blank");                      // opened first so phone pop-up blockers allow it
+    const { data, error } = await supabase.storage.from(SUPABASE_BUCKET).createSignedUrl(row.file_path, 600);
+    const url = (!error && data && data.signedUrl) || getPublicFileUrl(row.file_path);
+    if (error) console.error(error);
+    if (win && url) win.location.href = url; else { if (win) win.close(); showToast("Couldn't open the file."); }
   }
   async function setStatus(id, status) {
     const { data, error } = await supabase.from("resources").update({ status }).eq("id", id).select().single();
@@ -313,6 +325,12 @@
     if (a === "c-login") requireLogin(() => render());
     else if (a === "c-signup") setState({ authOpen: true, authMode: "signup", authStep: "form", authError: "", authInfo: "", pending: null });
     else if (a === "c-again") { ui.done = false; ui.enter = true; setTimeout(() => { ui.enter = false; }, 1200); render(); }
+    else if (a === "c-view-upload" && ui.last) {
+      const sub = subjectsById[ui.last.subjectId]; if (!sub) return;
+      Object.assign(state, { page: "browse", unitFilter: "all", nav: { deptId: sub.deptId, year: sub.year, sem: sub.sem, subjectId: sub.id, category: ui.last.type, teacherId: null } });
+      render(); scrollTop();
+    }
+    else if (a === "c-adm-view") viewAdminFile(id);
     else if (a === "c-type") { form.type = el.getAttribute("data-v"); if (!unitApplies(form.type)) form.unit = ""; render(); }
     else if (a === "c-unit") { form.unit = el.getAttribute("data-v"); render(); }
     else if (a === "c-pick") { const fi = document.getElementById("c-file"); if (fi) fi.click(); }
@@ -350,12 +368,23 @@
   });
   // live countdowns: lock-out timer and "access ends in" timer (updated in place, no re-render)
   const mmss = (ms) => { const t = Math.max(0, Math.ceil(ms / 1000)); return String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0"); };
+  let timeUpDone = false;
   setInterval(() => {
-    if (state.page !== "upload") { ui.here = false; return; }
+    if (state.page !== "upload") return;
+    // lock-out countdown: update the numbers only
     const c = document.getElementById("c-count");
-    if (c) { const ms = ui.blockedUntil - Date.now(); if (ms <= 0) { ui.blockedUntil = 0; ui.codeMsg = ""; ui.remaining = null; render(); } else c.textContent = mmss(ms); }
+    if (c) {
+      const ms = ui.blockedUntil - Date.now();
+      if (ms > 0) c.textContent = mmss(ms);
+      else if (!ui.busy) { ui.blockedUntil = 0; ui.codeMsg = ""; ui.remaining = null; render(); }   // one redraw when the block ends
+    }
+    // access countdown (never shown to admins): update the numbers only
     const l = document.getElementById("c-left");
-    if (l) { const ms = state.uploadUntil - Date.now(); if (ms <= 0) render(); else l.textContent = mmss(ms); }
+    if (l) {
+      const ms = state.uploadUntil - Date.now();
+      if (ms > 0) { l.textContent = mmss(ms); timeUpDone = false; }
+      else if (!ui.busy && !timeUpDone) { timeUpDone = true; render(); }                              // one redraw to lock the form
+    }
   }, 1000);
   document.addEventListener("submit", (e) => {
     const c = e.target.closest('[data-c-form="code"]'), u = e.target.closest('[data-c-form="upload"]');
