@@ -386,7 +386,7 @@ const CURRICULUM = {
 }; 
 
 const CATEGORIES = [
-  { key: "teacher-notes", label: "Teacher Notes", emoji: "📚", desc: "Lecture and handwritten notes by faculty" },
+  { key: "teacher-notes", label: "Notes", emoji: "📚", desc: "Lecture and handwritten notes" },
   { key: "pyq", label: "Previous Year Papers", emoji: "📄", desc: "Solved and unsolved question papers" },
   { key: "important", label: "Important Questions", emoji: "⭐", desc: "High-yield questions worth revising first" },
   { key: "assignment", label: "Assignments", emoji: "📑", desc: "Graded and practice assignments" },
@@ -623,7 +623,6 @@ const state = {
   avatar: null, avatarOpen: false, editingName: false, codeOpen: false, isAdmin: false, uploadUntil: 0, username: null,
 };
 let toastTimer = null;
-let uploadedFile = null; // holds the File object chosen in the upload form
 
 function setState(patch) {
   Object.assign(state, patch);
@@ -678,14 +677,15 @@ function userName() {
 }
 let resourcesReady = Promise.resolve();
 function addDbResource(r) {
+  if (r.status && r.status !== "approved") return;   // pending / rejected never show as public cards
   const sub = subjectsById[r.subject_id]; if (!sub) return;
-  const res = makeRealResource({ subjectId: sub.id, subjectName: sub.name, type: r.type, unit: r.unit, teacher: r.teacher || r.uploaded_by || "Faculty", title: r.title, filePath: r.file_path, seed: "db-" + r.id });
+  const res = makeRealResource({ subjectId: sub.id, subjectName: sub.name, type: r.type, unit: r.unit, teacher: r.contributor_name || r.teacher || r.uploaded_by || "Contributor", title: r.title, filePath: r.file_path, seed: "db-" + r.id });
   resourcesById[res.id] = res;
   if (!sub.resourceIds.includes(res.id)) sub.resourceIds.push(res.id);
 }
 async function loadUploadedResources() {
   if (!supabase) return;
-  const { data, error } = await supabase.from("resources").select("*").order("created_at");
+  const { data, error } = await supabase.from("resources").select("*").eq("status", "approved").order("created_at");
   if (error) { console.error(error); return; }
   data.forEach(addDbResource); render();
 }
@@ -810,10 +810,13 @@ async function logout() {
   showToast("Logged out");
   setState({ page: "home" });
 }
+// Must match an entry in Supabase -> Authentication -> URL Configuration -> Redirect URLs
+const SITE_URL = window.location.origin + window.location.pathname.replace(/index\.html$/, "");
 async function oauth(provider) {
+  if (provider !== "google") return;
   if (!supabase) { showToast("Login is unavailable right now"); return; }
-  const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo: window.location.origin + window.location.pathname } });
-  if (error) { authBad(error.message); showToast(error.message); }
+  const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo: SITE_URL, queryParams: { prompt: "select_account" } } });
+  if (error) { console.error(error); authBad("Google sign-in couldn't start. Please try again."); }
 }
 const loginWithGoogle = () => oauth("google");
 
@@ -1287,8 +1290,8 @@ function renderResourceCard(r) {
       </button>
     </div>
     <div class="font-display res-title">${esc(r.title)}</div>
-    <div class="res-meta">${esc(r.subjectName)}${r.unit ? ` · Unit ${r.unit}` : ""}</div>
-    <div class="res-meta">By ${esc(r.teacher)}</div>
+    <div class="res-meta">${esc(r.subjectName)}${r.unit ? ` · Unit ${r.unit}` : ""} · ${esc((CAT_BY_KEY[r.type] || {}).label || "")}</div>
+    <div class="res-meta">${subjectsById[r.subjectId] ? `Semester ${subjectsById[r.subjectId].sem} · ${esc((deptById(subjectsById[r.subjectId].deptId) || {}).name || "")} · ` : ""}By ${esc(r.teacher)}</div>
     <div class="res-meta2">${r.size ? r.size + " MB · " : ""}Added ${r.date}</div>
     <div class="res-actions">
       <button class="btn btn-secondary btn-sm" data-action="open-resource" data-id="${esc(r.id)}">${icon("eye", 13)} View</button>
@@ -1394,7 +1397,6 @@ function renderAuthModal() {
     <p class="form-note center">We'll email a 6-digit code to verify it's really you.</p>`;
   const social = `<div class="social-row">
       <button type="button" class="btn btn-secondary" data-action="auth-google"><svg width="17" height="17" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.88 2.7-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.98v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.98A9 9 0 0 0 0 9c0 1.45.35 2.83.98 4.03l2.97-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .98 4.97l2.97 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg> Google</button>
-      <button type="button" class="btn btn-secondary" data-action="auth-github">${icon("github", 17, "fill:currentColor;stroke:none")} GitHub</button>
     </div><div class="or-row"><span>or with email</span></div>`;
   const body = verify ? codeForm : `${social}
     ${su ? "" : `<div class="tab-row"><button type="button" class="chip ${tab === "password" ? "active" : ""}" data-action="auth-tab" data-tab="password">Password</button><button type="button" class="chip ${tab === "otp" ? "active" : ""}" data-action="auth-tab" data-tab="otp">Email code</button></div>`}
@@ -1420,72 +1422,7 @@ function infoBlock(label, value) {
   return `<div><div class="info-label">${label}</div><div class="info-value">${esc(value)}</div></div>`;
 }
 
-/* ============================== UPLOAD PAGE ============================== */
-
-let uploadSubmitted = false;
-
-function renderUploadPage() {
-  const resourceTypes = [" Notes", "Handwritten Notes", "PYQ", "Important Questions", "Assignment", "Lab Material", "Reference Material"];
-
-  if (uploadSubmitted) {
-    return `
-    <div class="upload-success">
-      <div class="success-icon">${icon("check", 28, "color:#1E8A5C")}</div>
-      <h1 class="font-display">Thanks for contributing!</h1>
-      <p>Your upload is queued for review. It'll go live once a moderator checks it.</p>
-      <div class="success-actions">
-        <button class="btn btn-primary" data-action="upload-another">Upload another</button>
-        <button class="btn btn-secondary" data-action="set-page" data-page="dashboard">Go to dashboard</button>
-      </div>
-    </div>`;
-  }
-
-  return `
-  <div class="upload-wrap">
-    <div class="eyebrow">Give back to your batch</div>
-    <h1 class="font-display upload-title">Share your notes.</h1>
-    <p style="margin-top:8px;font-weight:600;color:var(--ink-99);">Help the next student find what you couldn't.</p>
-    <form class="upload-form" data-action="submit-upload">
-      <div class="form-grid">
-        ${fieldHTML("Contributor name", "text", "Your name", true)}
-        ${selectHTML("Department", DEPARTMENTS.map((d) => d.name))}
-        ${selectHTML("Year", ["First Year", "Second Year", "Third Year", "Fourth Year"])}
-        ${selectHTML("Semester", ["Semester 1", "Semester 2", "Semester 3", "Semester 4", "Semester 5", "Semester 6", "Semester 7", "Semester 8"])}
-        ${fieldHTML("Subject", "text", "e.g. Database Management Systems")}
-        ${fieldHTML("Teacher", "text", "e.g. Dr. Priya Sharma")}
-        ${selectHTML("Unit", ["Unit 1", "Unit 2", "Unit 3", "Unit 4", "Unit 5"])}
-        ${selectHTML("Resource type", resourceTypes)}
-      </div>
-      <div class="field">
-        <label>Title</label>
-        <input type="text" placeholder="e.g. Unit 3 Normalization Notes" required />
-      </div>
-      <div class="field">
-        <label>Description</label>
-        <textarea rows="3" placeholder="What's covered in this file?"></textarea>
-      </div>
-      <div class="field">
-        <label>Upload PDF</label>
-        <!-- FIX: the real <input type="file"> and the ids the JS listens on
-             ("dropzone" / "pdf-input" / "dropzone-text") were missing from
-             the markup before, so choosing/dropping a file never did anything. -->
-        <div class="dropzone" id="dropzone">
-          <input type="file" id="pdf-input" accept="application/pdf" style="display:none" />
-          ${icon("upload", 20, "color:var(--ink-80)")}
-          <span id="dropzone-text">Drag a PDF here, or tap to choose a file</span>
-        </div>
-      </div>
-      <p class="form-note">All uploaded resources are reviewed before being published.</p>
-      <button type="submit" class="btn btn-primary btn-lg btn-full">Submit for review ${icon("arrowRight", 16)}</button>
-    </form>
-  </div>`;
-}
-function fieldHTML(label, type, placeholder, required) {
-  return `<div class="field"><label>${label}</label><input type="${type}" placeholder="${esc(placeholder)}" ${required ? "required" : ""} /></div>`;
-}
-function selectHTML(label, options) {
-  return `<div class="field"><label>${label}</label><select>${options.map((o) => `<option>${esc(o)}</option>`).join("")}</select></div>`;
-}
+/* UPLOAD PAGE + ADMIN REVIEW PAGE live in contribute.js */
 
 /* ============================== DASHBOARD / SAVED ============================== */
 
@@ -1502,7 +1439,7 @@ function renderProfilePage() {
   const card = (cls, ic, title, sub, action, extra = "") => `<button class="pf-card ${cls}" data-action="${action}" ${extra}><span class="pf-ic">${icon(ic, 24)}</span><b class="font-display">${title}</b><span class="pf-sub">${sub}</span></button>`;
   const who = state.editingName
     ? `<form class="pf-edit" data-action="save-name"><input name="username" maxlength="20" value="${esc(userName())}" autocomplete="off" required aria-label="Your name" /><div class="pf-row"><button type="submit" class="pf-btn pf-main">Save</button><button type="button" class="pf-btn pf-line" data-action="cancel-name">Cancel</button></div></form>`
-    : `<h1 class="font-display pf-name">${esc(userName())}</h1><p class="pf-mail">${esc((state.user && state.user.email) || "")}</p>${state.isAdmin ? `<span class="pf-badge">Admin</span>` : ""}<button class="pf-btn pf-main" data-action="edit-name">Edit name</button>`;
+    : `<h1 class="font-display pf-name">${esc(userName())}</h1><p class="pf-mail">${esc((state.user && state.user.email) || "")}</p>${state.isAdmin ? `<span class="pf-badge">Admin</span><button class="pf-btn pf-line" data-action="set-page" data-page="admin">Review contributions</button>` : ""}<button class="pf-btn pf-main" data-action="edit-name">Edit name</button>`;
   return `
   <div class="wrap pf">
     <aside class="pf-side">
@@ -1515,10 +1452,9 @@ function renderProfilePage() {
       <div class="pf-grid">
         ${card("c1", "bookOpen", "Continue Studying", "Jump back into your subjects.", "go-browse")}
         ${card("c2", "heart", "Saved Notes", `${state.saved.size} saved · notes you've hearted`, "set-page", 'data-page="saved"')}
-        ${can ? card("c3", "upload", "Uploaded Notes", state.isAdmin ? "Admin · upload anytime." : "Unlocked · share something new.", "set-page", 'data-page="upload"') : card("c3", "upload", "Uploaded Notes", "Enter the secret code to unlock.", "toggle-code")}
+        ${can ? card("c3", "upload", "Uploaded Notes", state.isAdmin ? "Admin · upload anytime." : "Unlocked · share something new.", "set-page", 'data-page="upload"') : card("c3", "upload", "Contribute", "Enter the access code to upload.", "set-page", 'data-page="upload"')}
         ${card("c4", "download", "Downloaded", `${dl.length} downloaded · files saved to your device`, "noop")}
       </div>
-      ${state.codeOpen && !can ? `<form class="pf-panel pf-code" data-action="redeem-code"><div><b class="font-display">Contributor access</b><p>Ask the admin for the secret code. Access lasts 30 minutes.</p></div><input type="password" name="code" autocomplete="off" required placeholder="Secret code" aria-label="Secret code" /><button class="pf-btn pf-main" type="submit">Unlock</button></form>` : ""}
       <div class="pf-panel">
         <div class="section-head">${icon("clock", 18)}<h2 class="font-display">Recently Viewed</h2></div>
         ${recent.length ? `<div class="grid resource-grid">${recent.map((r) => renderResourceCard(r)).join("")}</div>` : `<p class="pf-empty">Nothing viewed yet. Open a resource and it'll show up here.</p>`}
@@ -1622,6 +1558,7 @@ function render() {
   else if (state.page === "upload") pageHTML = renderUploadPage();
   else if (state.page === "saved") pageHTML = renderSavedPage();
   else if (state.page === "profile") pageHTML = renderProfilePage();
+  else if (state.page === "admin") pageHTML = renderAdminPage();
 
   const html = `
     ${renderHeader()}
@@ -1650,10 +1587,6 @@ function render() {
 /* ============================== EVENT DELEGATION ============================== */
 
 document.addEventListener("click", (e) => {
-  // Click-to-browse on the upload dropzone (NEW — opens the real file picker)
-  const zone = e.target.closest("#dropzone");
-  if (zone) { document.getElementById("pdf-input").click(); return; }
-
   const el = e.target.closest("[data-action]");
   if (!el) return;
   const action = el.getAttribute("data-action");
@@ -1698,7 +1631,6 @@ document.addEventListener("click", (e) => {
     case "switch-auth": setState({ authMode: state.authMode === "login" ? "signup" : "login", authError: "", authInfo: "" }); break;
     case "auth-tab": setState({ authTab: el.getAttribute("data-tab"), authError: "", authInfo: "", otpSent: false }); break;
     case "auth-google": loginWithGoogle(); break;
-    case "auth-github": oauth("github"); break;
     case "auth-mode": setState({ authMode: el.getAttribute("data-mode"), authStep: "form", authTab: "password", otpSent: false, authError: "", authInfo: "" }); break;
     case "toggle-pw": { const i = el.parentElement.querySelector("input"); i.type = i.type === "password" ? "text" : "password"; break; }
     case "otp-resend": resendCode(); break;
@@ -1707,7 +1639,6 @@ document.addEventListener("click", (e) => {
     case "pick-avatar": pickAvatar(el.getAttribute("data-avatar")); break;
     case "edit-name": setState({ editingName: true }); break;
     case "cancel-name": setState({ editingName: false }); break;
-    case "toggle-code": setState({ codeOpen: !state.codeOpen }); break;
     case "goto-profile": setPage("profile"); break;
     case "noop": break;
     case "profile-tab": setState({ profileTab: el.getAttribute("data-tab") }); break;
@@ -1715,8 +1646,6 @@ document.addEventListener("click", (e) => {
     case "search-goto-subject": goToSubjectFromSearch(el.getAttribute("data-id")); break;
     case "search-goto-resource": goToResourceFromSearch(el.getAttribute("data-id")); break;
     case "goto-upload": setPage("upload"); break;
-    case "view-upload": { const u = subjectsById[lastUpload.subjectId]; Object.assign(state, { page: "browse", unitFilter: "all", nav: { deptId: u.deptId, year: u.year, sem: u.sem, subjectId: u.id, category: lastUpload.type, teacherId: null } }); render(); scrollTop(); break; }
-    case "upload-another": uploadSubmitted = false; uploadedFile = null; render(); break;
     default: break;
   }
 });
@@ -1726,73 +1655,6 @@ document.addEventListener("input", (e) => {
     state.searchQuery = e.target.value;
     render();
   }
-});
-
-document.addEventListener("change", (e) => {
-  if (e.target && e.target.id === "pdf-input") {
-    const file = e.target.files[0];
-    const text = document.getElementById("dropzone-text");
-    if (!file) return;
-    if (file.type !== "application/pdf") {
-      showToast("Please choose a PDF file");
-      e.target.value = "";
-      return;
-    }
-    uploadedFile = file;
-    if (text) text.textContent = `Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
-  }
-});
-
-// drag-and-drop support
-document.addEventListener("dragover", (e) => {
-  if (e.target.closest("#dropzone")) e.preventDefault();
-});
-document.addEventListener("drop", (e) => {
-  const zone = e.target.closest("#dropzone");
-  if (!zone) return;
-  e.preventDefault();
-  const file = e.dataTransfer.files[0];
-  if (file && file.type === "application/pdf") {
-    uploadedFile = file;
-    document.getElementById("pdf-input").files = e.dataTransfer.files;
-    document.getElementById("dropzone-text").textContent = `Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
-  } else {
-    showToast("Please drop a PDF file");
-  }
-});
-
-document.addEventListener("change", (e) => {
-  const k = e.target.getAttribute && e.target.getAttribute("data-up");
-  if (!k) return;
-  upForm[k] = e.target.value;
-  if (["dept", "year", "sem"].includes(k)) { upForm.subject = ""; render(); }
-});
-document.addEventListener("input", (e) => {
-  const k = e.target.getAttribute && e.target.getAttribute("data-up");
-  if (k && e.target.tagName === "INPUT") upForm[k] = e.target.value;
-});
-document.addEventListener("submit", async (e) => {
-  const form = e.target.closest('[data-action="submit-upload"]');
-  if (!form) return;
-  e.preventDefault();
-  const f = upForm;
-  if (!f.subject) return showToast("Choose a subject");
-  if (!uploadedFile) return showToast("Please choose a PDF first");
-  if (uploadedFile.size > 25 * 1024 * 1024) return showToast("PDF must be under 25 MB");
-  const btn = form.querySelector('button[type="submit"]');
-  if (!/\.pdf$/i.test(uploadedFile.name)) return showToast("Only PDF files are allowed");
-  if (!canUpload()) return showToast("Contributor access expired. Unlock it again from your profile.");
-  const label = btn.innerHTML; btn.disabled = true; btn.textContent = "Uploading...";
-  const fail = (m) => { showToast(m); btn.disabled = false; btn.innerHTML = label; };
-  const path = `${f.dept}/y${f.year}-s${f.sem}/${f.type}/${Date.now()}_${uploadedFile.name.replace(/[^\w.-]+/g, "_").slice(-80)}`;
-  const up = await supabase.storage.from(SUPABASE_BUCKET).upload(path, uploadedFile, { contentType: "application/pdf" });
-  if (up.error) return fail("Upload failed: " + up.error.message);
-  const ins = await supabase.from("resources").insert({ subject_id: f.subject, type: f.type, unit: f.unit ? Number(f.unit) : null, teacher: userName(), title: f.title.trim(), file_path: path, uploaded_by: userName() }).select().single();
-  if (ins.error) { await supabase.storage.from(SUPABASE_BUCKET).remove([path]); return fail("Could not save: " + ins.error.message); }
-  addDbResource(ins.data);
-  lastUpload = { subjectId: f.subject, type: f.type };
-  uploadedFile = null; f.title = ""; uploadSubmitted = true;
-  render(); showToast("Uploaded!");
 });
 
 document.addEventListener("submit", (e) => {
@@ -1819,20 +1681,20 @@ async function saveName(form) {
   await supabase.auth.updateUser({ data: { username: v } });
   state.username = v; state.editingName = false; render(); showToast("Name updated");
 }
-async function redeemCode(form) {
-  const code = form.elements.code.value; form.elements.code.value = "";
-  const { data: ok, error } = await supabase.rpc("redeem_upload_code", { code });   // checked on the server only
-  if (error) return showToast(error.message);
-  if (!ok) return showToast("Wrong code. Ask the admin.");
-  state.uploadUntil = Date.now() + 30 * 60000; state.codeOpen = false; render();
-  showToast("Contributor access unlocked for 30 minutes");
-}
 document.addEventListener("submit", (e) => {
-  const n = e.target.closest('[data-action="save-name"]'), c = e.target.closest('[data-action="redeem-code"]');
-  if (n) { e.preventDefault(); saveName(n); } else if (c) { e.preventDefault(); redeemCode(c); }
+  const n = e.target.closest('[data-action="save-name"]');
+  if (n) { e.preventDefault(); saveName(n); }
 });
 
 /* ============================== INIT ============================== */
+(function oauthErrorFromUrl() {
+  const p = new URLSearchParams(window.location.search + "&" + window.location.hash.replace(/^#/, ""));
+  const d = p.get("error_description") || p.get("error");
+  if (!d) return;
+  console.error("OAuth error:", d);
+  history.replaceState(null, "", window.location.pathname);
+  setTimeout(() => showToast("Google sign-in couldn't be completed. Please try again."), 400);
+})();
 render();
 resourcesReady = loadUploadedResources();
 // Supabase keeps the login in the browser, so returning students are recognised
