@@ -121,15 +121,6 @@ No framework and no build step: plain HTML, CSS and JavaScript talking to Supaba
 
 ---
 
-## 🎬 Preview
-
-<div align="center">
-
-<img src="images/home.png" width="85%" alt="Lumos home page"/><br><br>
-<img src="images/browse.png" width="85%" alt="Lumos browse page"/><br><br>
-<img src="images/dashboard.png" width="85%" alt="Lumos profile page"/>
-
-</div>
 
 ---
 
