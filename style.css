@@ -303,10 +303,10 @@ svg.ic{ stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; st
   box-shadow: 5px 5px 0 var(--ink);
 }
 
-.year-card:nth-child(1) { background: #FDE4E0; }
-.year-card:nth-child(2) { background: #E3F2FF; }
-.year-card:nth-child(3) { background: #FFF3D2; }
-.year-card:nth-child(4) { background: #E1F5EC; }
+.year-card:nth-child(1) { background: #facac3; }
+.year-card:nth-child(2) { background: #a9d3f8; }
+.year-card:nth-child(3) { background: #fee9b2; }
+.year-card:nth-child(4) { background: #bbfbde; }
 
 .year-card::after {
   content: "→";
@@ -338,12 +338,12 @@ svg.ic{ stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; st
   overflow: hidden;
   border-radius: 22px;
   text-align: left;
-  background: #E3F2FF;
+  background: #d5b5ff;
   box-shadow: 5px 5px 0 var(--ink);
 }
 
 .sem-card:nth-child(2) {
-  background: #FFF3D2;
+  background: #fbe7b1;
 }
 
 .sem-card::before {
@@ -437,7 +437,7 @@ svg.ic{ stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; st
 }
 
 .subject-card:nth-child(3n)::before {
-  background: #1E8A5C;
+  background: #401e8a;
 }
 
 .subject-card:hover {
@@ -465,12 +465,12 @@ svg.ic{ stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; st
   box-shadow: 3px 3px 0 var(--ink);
 }
 
-.cat-card:nth-child(1) { background: #b1d7f9; }
-.cat-card:nth-child(2) { background: #fbeabe; }
-.cat-card:nth-child(3) { background: #fccdc6; }
-.cat-card:nth-child(4) { background: #cdfde7; }
-.cat-card:nth-child(5) { background: #c5e2fc; }
-.cat-card:nth-child(6) { background: #fdedc0; }
+.cat-card:nth-child(1) { background: #a5d1f8; }
+.cat-card:nth-child(2) { background: #f9e7b9; }
+.cat-card:nth-child(3) { background: #fdc9c1; }
+.cat-card:nth-child(4) { background: #c6fde4; }
+.cat-card:nth-child(5) { background: #c4e4ff; }
+.cat-card:nth-child(6) { background: #ffedbc; }
 .cat-card:nth-child(7) { background: #ceffe9; }
 
 .cat-card:hover:not([disabled]) {
