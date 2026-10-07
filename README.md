@@ -175,7 +175,7 @@ It's still a work in progress, but then again, most good things are.
 
 <div align="center">
 
-**Made with 💛 by Pooja and the team**
+**Made with 💛**
 
 <sub>⭐ If Lumos helped you study, give it a star.</sub>
 
