@@ -131,31 +131,6 @@ lumos-/
 
 ---
 
-## 🛠️ Set up your own Lumos
-
-<details>
-<summary><b>Click to open the steps</b> (about 20 minutes, all free)</summary>
-
-<br>
-
-1. **Clone it**
-   ```bash
-   git clone https://github.com/percyjacksonn/lumos-.git
-   cd lumos-
-   ```
-2. **Create a free project** at [supabase.com](https://supabase.com). Under *Project Settings → API* copy the project URL and the public (publishable) key.
-3. **Paste them into `script.js`** at the top (`supabaseUrl` and `supabaseKey`). Never paste a `service_role` key into the website.
-4. **Create a bucket** called `study-materials` in *Storage* and set it to **Public**.
-5. **Run the database setup** in *SQL Editor → Create a new snippet*, one file per snippet and in order: the base setup (profiles, saved, downloads), then the contribution setup, then your secrets file (access code, your admin email, email key).
-6. **Turn on email alerts (optional)** with a free [Resend](https://resend.com) key.
-7. **Open `index.html`** with VS Code Live Server, or publish the repo with *Settings → Pages*.
-
-> 🔑 Keep the file that holds your access code and email key **out of GitHub**.
-
-</details>
-
----
-
 ## 🍴 Fork & improve
 
 Want to experiment? Fork the repo and build on top of it. Found a bug or have an idea? Open an issue or send a pull request. Pull requests and kind suggestions are always welcome. 💛
