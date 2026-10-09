@@ -13,9 +13,8 @@
 
 <a href="https://percyjacksonn.github.io/lumos-/"><b>🌐 Open Lumos</b></a>
 &nbsp;•&nbsp;
-<a href="#-contribute-to-lumos"><b>⬆️ How to contribute</b></a>
+<a href="#-⬆️-Contribute-to-Lumos"><b>⬆️ How to contribute</b></a>
 &nbsp;•&nbsp;
-<a href="#-set-up-your-own-lumos"><b>🛠️ Run your own</b></a>
 
 </div>
 
