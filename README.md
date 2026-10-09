@@ -11,11 +11,6 @@
   <img src="https://img.shields.io/badge/Hosting-Free-2FAE73?style=for-the-badge"/>
 </p>
 
-<a href="https://percyjacksonn.github.io/lumos-/"><b>🌐 Open Lumos</b></a>
-&nbsp;•&nbsp;
-<a href="#-⬆️-Contribute-to-Lumos"><b>⬆️ How to contribute</b></a>
-&nbsp;•&nbsp;
-
 </div>
 
 <br>
