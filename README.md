@@ -57,12 +57,6 @@ Notes, question papers and lab manuals end up scattered across WhatsApp groups, 
 
 **Only the Lumos admin and people who have the secret code can contribute.** Anyone can open the Contribute page and read how it works. Uploading needs a login and the code.
 
-- 🔐 **Secret code, checked on the server.** The code is never in the website files. Supabase stores only a scrambled (bcrypt) version of it, and the check runs inside the database.
-- 🚫 **3 tries, then a 30-minute block.** The block is stored in the database, so clearing the browser, switching browsers or editing the JavaScript doesn't reset it. A repeat-offender alert email goes to the admin.
-- 📥 **Uploads wait for review.** A contribution is saved as *pending*. The admin gets an email, previews the file, then **approves, rejects or deletes** it.
-- 🃏 **Approved files become normal Lumos cards**, with the same View, Download and Save buttons as everything else. They show the subject, unit (when it applies), type, semester and department.
-- ✅ **Checked twice.** The page validates the form, and the database re-checks everything: department, semester, unit, file name and who is uploading.
-
 ```mermaid
 flowchart LR
     A([Visitor opens Contribute]) --> B{Logged in?}
@@ -168,10 +162,7 @@ Want to experiment? Fork the repo and build on top of it. Found a bug or have an
 
 ---
 
-## 🌱 Learning while building
 
-Lumos started as a second-year mini project. The plan was simple, and then it grew into the little details: how the layout feels, how cards respond, how safe the uploads are.
-It's still a work in progress, but then again, most good things are.
 
 <div align="center">
 
