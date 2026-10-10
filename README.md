@@ -15,7 +15,7 @@
 
 <br>
 
-> _"Finding your study material shouldn't become a study session itself."_ 😭
+> _"Bring out the files dumped in dark places to light ."_ 😭
 
 Notes, question papers and lab manuals end up scattered across WhatsApp groups, Google Classroom and random drives.
 **Lumos puts them in one organised place**, sorted by **department → year → semester → subject**.
