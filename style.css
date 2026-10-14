@@ -727,3 +727,49 @@ svg.ic{ stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; st
 @keyframes cRing{0%{transform:scale(.9);opacity:.9;}100%{transform:scale(1.5);opacity:0;}}
 @keyframes cConfetti{0%{transform:rotate(var(--a)) translateY(0) scale(1);opacity:1;}100%{transform:rotate(var(--a)) translateY(-120px) scale(.6);opacity:0;}}
 @media (prefers-reduced-motion:reduce){.c-hero *,.c-panel *,.c-lock,.c-up,.c-step .c-dot,.c-shake,.c-in,.c-check,.c-check::after,.c-burst i,.c-bar i,.c-unlocked,.c-file,.c-unit-field{animation:none !important;}}
+
+/* =====================================================================
+   ADDITIONS ONLY (nothing above this line was changed):
+   read-only PDF preview + admin Members & logins tables
+   ===================================================================== */
+div.pdf-preview{overflow:auto;background:#f4f1e6;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+.pdfv-page{display:block;width:100%;height:auto;margin:0 0 8px;background:#fff;pointer-events:none;}
+.pdfv-msg{padding:22px 12px;text-align:center;font-weight:700;font-size:14px;color:var(--ink-80);}
+.c-tablewrap{overflow-x:auto;border:2.5px solid var(--ink);border-radius:16px;background:#fff;box-shadow:4px 4px 0 var(--ink);margin-top:12px;}
+.c-table{width:100%;border-collapse:collapse;font-size:13px;}
+.c-table th{text-align:left;padding:10px 12px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-80);background:#fff3d2;border-bottom:2.5px solid var(--ink);white-space:nowrap;}
+.c-table td{padding:10px 12px;border-bottom:1.5px solid rgba(22,17,15,.12);white-space:nowrap;}
+.c-table tr:last-child td{border-bottom:0;}
+.c-table tr.c-today td{background:#e1f5ec;}
+
+/* =====================================================================
+   MOTION / SOUND / LOADING ADDITIONS (nothing above this line was changed)
+   ===================================================================== */
+/* soft ambient colour behind everything (moved slowly by GSAP) */
+.mo-ambient{position:fixed;inset:-8vmax;z-index:-2;pointer-events:none;overflow:hidden;--a:#FFC93C;--b:#3AACFF;--c:#F0523A;}
+.mo-orb{position:absolute;display:block;border-radius:50%;will-change:transform;}
+.mo-orb.o1{width:54vmax;height:54vmax;left:-6vmax;top:-10vmax;background:radial-gradient(circle,var(--a) 0%,transparent 64%);opacity:.26;}
+.mo-orb.o2{width:48vmax;height:48vmax;right:-8vmax;top:20vmax;background:radial-gradient(circle,var(--b) 0%,transparent 64%);opacity:.20;}
+.mo-orb.o3{width:42vmax;height:42vmax;left:24vmax;bottom:-18vmax;background:radial-gradient(circle,var(--c) 0%,transparent 64%);opacity:.13;}
+/* three.js canvas (Home + Contribute only) */
+.mo-bg3d{position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;opacity:0;transition:opacity .9s ease;}
+.mo-bg3d.on{opacity:.8;}
+/* thin loading bar: follows real network work */
+.mo-bar{position:fixed;top:0;left:0;right:0;height:3px;z-index:70;pointer-events:none;opacity:0;transition:opacity .2s;}
+.mo-bar.on{opacity:1;}
+.mo-bar i{display:block;height:100%;background:var(--coral);transform-origin:0 50%;transform:scaleX(0);transition:transform .18s ease-out;box-shadow:0 0 8px rgba(240,82,58,.45);}
+/* small spinners + busy buttons */
+.mo-spin{width:14px;height:14px;border-radius:50%;border:2.5px solid rgba(255,255,255,.55);border-top-color:#fff;display:inline-block;vertical-align:-2px;animation:moSpin .7s linear infinite;}
+.mo-spin-dark{border-color:rgba(32,28,27,.22);border-top-color:var(--ink);}
+@keyframes moSpin{to{transform:rotate(360deg);}}
+.is-busy{pointer-events:none;opacity:.85;}
+.heart-btn .mo-spin,.save-toggle .mo-spin{width:12px;height:12px;border-width:2px;vertical-align:middle;}
+/* the preview's loading state, with real progress */
+.pdfv-load{display:grid;justify-items:center;gap:8px;padding:36px 12px;font-weight:700;font-size:14px;color:var(--ink-80);}
+.mo-prog{height:8px;width:min(260px,70%);border:2px solid var(--ink);border-radius:99px;overflow:hidden;background:#fff;}
+.mo-prog i{display:block;height:100%;width:0;background:var(--leaf);transition:width .2s;}
+/* while GSAP moves an element it must not also run the CSS hover transition */
+.mo-anim{transition:none !important;will-change:transform,opacity;}
+/* GSAP handles the Contribute page entrance when motion is on */
+.mo-on .c-in{animation:none !important;}
+@media (prefers-reduced-motion:reduce){.mo-bg3d{display:none;}.mo-spin{animation-duration:1.6s;}}
