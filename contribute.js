@@ -20,7 +20,7 @@
 
   const form = { type: "teacher-notes", dept: "", year: "", sem: "", subject: "", unit: "", name: "", title: "", desc: "" };
   const ui = { last: null, file: null, busy: false, progress: 0, error: "", checking: false, codeMsg: "", blockedUntil: 0, done: false, remaining: null, shake: false, here: false, enter: false };
-  const adm = { filter: "pending", list: [], loaded: false, loading: false };
+  const adm = { tab: "contributions", filter: "pending", list: [], loaded: false, loading: false, members: [], feed: [], summary: null, mLoaded: false, mLoading: false };
 
   const opt = (v, l, cur) => `<option value="${esc(v)}" ${String(cur) === String(v) ? "selected" : ""}>${esc(l)}</option>`;
   const sel = (label, key, options, ph) =>
@@ -202,6 +202,10 @@
 
   async function submitContribution() {
     if (ui.busy) return;
+    const endBar = busyStart();
+    try { await submitContributionInner(); } finally { endBar(); }
+  }
+  async function submitContributionInner() {
     const err = validate();
     if (err) { ui.error = err; return render(); }
     if (!canUpload()) { state.uploadUntil = 0; ui.error = "Contributor access expired. Enter the access code again."; return render(); }
@@ -224,7 +228,7 @@
       const live = data.status === "approved";                 // admin uploads skip the review queue
       if (live) addDbResource(data);                           // card appears immediately, no refresh needed
       ui.last = { subjectId: data.subject_id, type: data.type, live };
-      Object.assign(form, { title: "", desc: "", unit: "" }); ui.file = null; ui.done = true;
+      Object.assign(form, { title: "", desc: "", unit: "" }); ui.file = null; ui.done = true; sfx("success");
     } catch (e) {
       console.error(e);
       if (path) supabase.storage.from(SUPABASE_BUCKET).remove([path]).catch(() => {});
@@ -238,8 +242,12 @@
   }
 
   /* ---------------------------- ACCESS CODE ---------------------------- */
-  function shake() { ui.shake = true; setTimeout(() => { ui.shake = false; }, 700); }
+  function shake() { sfx("error"); ui.shake = true; setTimeout(() => { ui.shake = false; }, 700); }
   async function verifyCode(formEl) {
+    const endBar = busyStart();
+    try { await verifyCodeInner(formEl); } finally { endBar(); }
+  }
+  async function verifyCodeInner(formEl) {
     const input = formEl.elements.code, code = input.value; input.value = "";
     if (!code.trim()) { ui.codeMsg = "Enter the access code."; return render(); }
     if (ui.blockedUntil > Date.now()) { ui.codeMsg = TOO_MANY; return render(); }
@@ -250,7 +258,7 @@
       if (data.error === "auth") { ui.codeMsg = "Please log in first."; ui.checking = false; return render(); }
       if (data.ok) {
         state.uploadUntil = new Date(data.expires_at).getTime(); ui.codeMsg = ""; ui.blockedUntil = 0; ui.remaining = null;
-        showToast("Access granted. You can upload now.");
+        sfx("unlock"); showToast("Access granted. You can upload now.");
       } else if (data.blocked) {
         ui.blockedUntil = data.blocked_until ? new Date(data.blocked_until).getTime() : Date.now() + 30 * 60000;
         const t = new Date(ui.blockedUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -265,6 +273,7 @@
 
   /* ---------------------------- ADMIN REVIEW ---------------------------- */
   function renderAdminPage() {
+    if (state.isAdmin && adm.tab === "members") return renderMembers();
     if (!state.isAdmin) return `<div class="wrap" style="padding:60px 0;">${renderEmptyState("Admins only", "This page is for Lumos admins.")}</div>`;
     if (!adm.loaded && !adm.loading) { adm.loading = true; setTimeout(loadAdmin, 0); }
     const chip = (f) => `<button class="unit-chip ${adm.filter === f ? "active" : ""}" data-action="c-adm-filter" data-f="${f}">${f[0].toUpperCase() + f.slice(1)}</button>`;
@@ -280,11 +289,52 @@
           ${r.status !== "rejected" ? `<button class="btn btn-secondary btn-sm" data-action="c-adm-reject" data-id="${id}">Reject</button>` : ""}
           <button class="btn btn-secondary btn-sm" data-action="c-adm-delete" data-id="${id}">Delete</button></div></div>`;
     }).join("");
-    return `<div class="wrap" style="padding:40px 0;"><h1 class="font-display dash-title">Review contributions</h1>
+    return `<div class="wrap" style="padding:40px 0;"><h1 class="font-display dash-title">Admin</h1>
+      ${admTabs()}
       <div class="unit-chips">${chip("pending")}${chip("approved")}${chip("rejected")}</div>
       <div class="c-adm-list">${adm.loading ? "<p>Loading...</p>" : rows || `<p class="pf-empty">Nothing here.</p>`}</div></div>`;
   }
+  const admTabs = () => `<div class="unit-chips" style="margin-bottom:6px;">
+      <button class="unit-chip ${adm.tab === "contributions" ? "active" : ""}" data-action="c-adm-tab" data-t="contributions">Review contributions</button>
+      <button class="unit-chip ${adm.tab === "members" ? "active" : ""}" data-action="c-adm-tab" data-t="members">Members &amp; logins</button></div>`;
+
+  /* ---------- Members & logins (admin only; the database refuses anyone else) ---------- */
+  const fmt = (x) => x ? new Date(x).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+  const dayKey = (x) => new Date(x).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" });
+  function renderMembers() {
+    if (!adm.mLoaded && !adm.mLoading) { adm.mLoading = true; setTimeout(loadMembers, 0); }
+    const sm = adm.summary || {}, num = (v) => (v == null ? "…" : v);
+    const today = dayKey(Date.now());
+    const cards = [["Members", num(sm.total_users)], ["New today", num(sm.new_today)], ["Logins today", num(sm.logins_today)], ["People logged in today", num(sm.users_today)], ["All-time logins", num(sm.logins_total)]]
+      .map(([l, v]) => `<div class="stat-card"><div class="font-display stat-value">${esc(v)}</div><div class="stat-label">${l}</div></div>`).join("");
+    const rows = adm.members.map((m, i) => `<tr><td>${i + 1}</td><td><b>${esc(m.uname || "—")}</b></td><td>${esc(m.mail || "—")}</td><td>${fmt(m.joined_at)}</td><td><b>${esc(m.logins)}</b></td><td>${fmt(m.last_login_at)}</td></tr>`).join("");
+    const feed = adm.feed.map((f) => `<tr class="${dayKey(f.at) === today ? "c-today" : ""}"><td><b>${esc(f.uname || "—")}</b></td><td>${esc(f.mail || "—")}</td><td>${fmt(f.at)}</td></tr>`).join("");
+    return `<div class="wrap" style="padding:40px 0;"><h1 class="font-display dash-title">Admin</h1>${admTabs()}
+      <div class="grid stat-grid">${cards}</div>
+      <h2 class="font-display" style="font-size:20px;margin:26px 0 0;">Everyone who has signed up</h2>
+      <div class="c-tablewrap"><table class="c-table"><thead><tr><th>#</th><th>Username</th><th>Email</th><th>Joined</th><th>Logins</th><th>Last login</th></tr></thead>
+        <tbody>${adm.mLoading ? `<tr><td colspan="6">Loading...</td></tr>` : rows || `<tr><td colspan="6">No members yet.</td></tr>`}</tbody></table></div>
+      <h2 class="font-display" style="font-size:20px;margin:26px 0 0;">Recent logins <span class="c-muted" style="font-size:13px;">(today's are highlighted)</span></h2>
+      <div class="c-tablewrap"><table class="c-table"><thead><tr><th>Username</th><th>Email</th><th>Logged in</th></tr></thead>
+        <tbody>${adm.mLoading ? `<tr><td colspan="3">Loading...</td></tr>` : feed || `<tr><td colspan="3">No logins recorded yet. They are counted from now on.</td></tr>`}</tbody></table></div></div>`;
+  }
+  async function loadMembers() {
+    const endBar = busyStart();
+    try { await loadMembersInner(); } finally { endBar(); }
+  }
+  async function loadMembersInner() {
+    const [u, f, s2] = await Promise.all([supabase.rpc("admin_users"), supabase.rpc("admin_login_feed", { n: 60 }), supabase.rpc("admin_login_summary")]);
+    [u, f, s2].forEach((r) => { if (r.error) console.error(r.error); });
+    if (u.error || s2.error) showToast("Couldn't load members. Has 006_members_and_alerts.sql been run?");
+    adm.members = u.data || []; adm.feed = f.data || []; adm.summary = s2.data || null;
+    adm.mLoaded = true; adm.mLoading = false;
+    if (state.page === "admin") render();
+  }
   async function loadAdmin() {
+    const endBar = busyStart();
+    try { await loadAdminInner(); } finally { endBar(); }
+  }
+  async function loadAdminInner() {
     const { data, error } = await supabase.from("resources").select("*").eq("status", adm.filter).order("created_at", { ascending: false }).limit(200);
     if (error) { console.error(error); showToast("Couldn't load contributions."); }
     adm.list = data || []; adm.loaded = true; adm.loading = false;
@@ -299,13 +349,21 @@
     if (win && url) win.location.href = url; else { if (win) win.close(); showToast("Couldn't open the file."); }
   }
   async function setStatus(id, status) {
+    const endBar = busyStart();
+    try { await setStatusInner(id, status); } finally { endBar(); }
+  }
+  async function setStatusInner(id, status) {
     const { data, error } = await supabase.from("resources").update({ status }).eq("id", id).select().single();
     if (error) { console.error(error); return showToast("Action failed."); }
     if (status === "approved") addDbResource(data);
-    showToast(status === "approved" ? "Approved" : "Rejected");
+    sfx(status === "approved" ? "approve" : "reject"); showToast(status === "approved" ? "Approved" : "Rejected");
     adm.loaded = false; render();
   }
   async function removeContribution(id) {
+    const endBar = busyStart();
+    try { await removeContributionInner(id); } finally { endBar(); }
+  }
+  async function removeContributionInner(id) {
     if (!confirm("Delete this contribution permanently?")) return;
     const row = adm.list.find((r) => String(r.id) === id);
     const { error } = await supabase.from("resources").delete().eq("id", id);
@@ -313,7 +371,7 @@
     if (row && /^contributions\//.test(row.file_path || "")) await supabase.storage.from(SUPABASE_BUCKET).remove([row.file_path]);
     const rid = "db-" + id; delete resourcesById[rid];
     Object.values(subjectsById).forEach((s) => { s.resourceIds = s.resourceIds.filter((x) => x !== rid); });
-    showToast("Deleted"); adm.loaded = false; render();
+    sfx("reject"); showToast("Deleted"); adm.loaded = false; render();
   }
 
   /* ---------------------------- EVENTS ---------------------------- */
@@ -335,6 +393,9 @@
     else if (a === "c-unit") { form.unit = el.getAttribute("data-v"); render(); }
     else if (a === "c-pick") { const fi = document.getElementById("c-file"); if (fi) fi.click(); }
     else if (a === "c-rm-file") { ui.file = null; render(); }
+    else if (a === "c-adm-tab") { adm.tab = el.getAttribute("data-t"); adm.mLoaded = false; adm.loaded = false; render(); }
+    else if (a === "c-adm-review") { adm.tab = "contributions"; adm.loaded = false; setState({ page: "admin" }); window.scrollTo({ top: 0, behavior: "auto" }); }
+    else if (a === "c-adm-members") { adm.tab = "members"; adm.mLoaded = false; setState({ page: "admin" }); window.scrollTo({ top: 0, behavior: "auto" }); }
     else if (a === "c-adm-filter") { adm.filter = el.getAttribute("data-f"); adm.loaded = false; render(); }
     else if (a === "c-adm-approve") setStatus(id, "approved");
     else if (a === "c-adm-reject") setStatus(id, "rejected");
