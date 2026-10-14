@@ -1,3 +1,0 @@
-GSAP 3.15.0 (gsap.min.js, ScrollTrigger.min.js)
-GreenSock "Standard 'no charge' license" - free to use on websites like Lumos.
-The full terms are at https://gsap.com/standard-license  (declared in the library's own package.json and file headers).
