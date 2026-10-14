@@ -1,0 +1,11 @@
+<div style="background:#faf8ec;padding:28px 12px;font-family:'Trebuchet MS','Segoe UI',Arial,sans-serif;">
+  <div style="max-width:440px;margin:0 auto;background:#ffffff;border:3px solid #16110f;border-radius:20px;box-shadow:6px 6px 0 #16110f;padding:28px 24px;text-align:center;">
+    <div style="font-size:28px;font-weight:800;color:#16110f;letter-spacing:.5px;">lumos</div>
+    <h2 style="margin:14px 0 6px;font-size:20px;color:#16110f;">Your login code</h2>
+    <p style="margin:0 0 18px;font-size:14px;color:#4a4540;line-height:1.5;">Use this 6-digit code to log in to Lumos.</p>
+    <div style="display:inline-block;background:#fff3d2;border:3px solid #16110f;border-radius:14px;padding:12px 22px;font-size:34px;font-weight:800;letter-spacing:10px;color:#16110f;">{{ .Token }}</div>
+    <p style="margin:16px 0 14px;font-size:13px;color:#4a4540;">Type this code on the Lumos page,<br>or just tap the button:</p>
+    <a href="{{ .SiteURL }}?token_hash={{ .TokenHash }}&type=email" style="display:inline-block;background:#f0523a;color:#ffffff;text-decoration:none;font-weight:800;font-size:16px;padding:12px 26px;border:3px solid #16110f;border-radius:14px;box-shadow:4px 4px 0 #16110f;">Log me in</a>
+    <p style="margin:18px 0 0;font-size:12px;color:#6b655f;line-height:1.5;">The code and the button both expire soon and work once.<br>If you didn't ask for this, you can ignore this email.</p>
+  </div>
+</div>
