@@ -8,6 +8,9 @@ const supabaseUrl = "https://jlnbezpewkuqrwmcljdv.supabase.co";
 const supabaseKey = "sb_publishable_9mvDqyktUkE0JfMAJv7ukA_sJXNFxdz";
 
 // FIX: guard so the whole site doesn't die if the Supabase CDN script fails to load
+// true  = new members confirm their e-mail with a 6-digit code OR the button/link in the e-mail
+// false = no confirmation (switch "Confirm email" OFF in Supabase too)
+const EMAIL_CODES = true;
 const REMEMBER_KEY = "lumos-remember"; // "0" = forget when tab closes
 const authStorage = {
   getItem: (k) => localStorage.getItem(k) ?? sessionStorage.getItem(k),
@@ -42,10 +45,26 @@ function resourceFileUrl(r) {
   if (!r) return null;
   return r.url || getPublicFileUrl(r.filePath);
 }
+// Files are private: a short-lived signed link is made for each view. (If the bucket is still public it simply falls back.)
+async function fileUrlFor(r) {
+  if (!r) return null;
+  if (r.filePath && supabase) {
+    const { data, error } = await supabase.storage.from(SUPABASE_BUCKET).createSignedUrl(r.filePath, 600);
+    if (!error && data && data.signedUrl) return data.signedUrl;
+    if (error) console.error(error);
+  }
+  return r.url || getPublicFileUrl(r.filePath);
+}
 function isPdfPath(path) {
   return !!path && path.toLowerCase().split("?")[0].endsWith(".pdf");
 }
 
+// loading bar: busyStart() returns a function; call it when the REAL operation ends (success or failure)
+const busyStart = () => { try { return (window.Motion && window.Motion.busyStart) ? window.Motion.busyStart() : () => {}; } catch (e) { return () => {}; } };
+const soundOn = () => !(window.Sfx && !window.Sfx.enabled());
+const dlBusy = new Set(), saveBusy = new Set();
+const spin = (dark) => `<i class="mo-spin${dark ? " mo-spin-dark" : ""}"></i>`;
+const sfx = (n) => { try { if (window.Sfx) window.Sfx.play(n); } catch (e) { /* sound is optional */ } };
 const hash = (str) => {
   let h = 0;
   for (let i = 0; i < str.length; i++) h = (Math.imul(h, 31) + str.charCodeAt(i)) >>> 0;
@@ -599,6 +618,8 @@ linkedin: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7.5 10v7M7
   sparkles: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
   activity: '<path d="M3 12h4l2 8 4-16 2 8h6"/>',
+  volume: '<path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/>',
+  volumeOff: '<path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="m17 9 5 6"/><path d="m22 9-5 6"/>',
   logOut: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
 };
 function icon(name, size = 16, extra = "") {
@@ -685,11 +706,17 @@ function addDbResource(r) {
 }
 async function loadUploadedResources() {
   if (!supabase) return;
+  const done = busyStart();
   const { data, error } = await supabase.from("resources").select("*").eq("status", "approved").order("created_at");
+  done();
   if (error) { console.error(error); return; }
   data.forEach(addDbResource); render();
 }
 async function loadUserData() {
+  const done = busyStart();
+  try { await loadUserDataInner(); } finally { done(); }
+}
+async function loadUserDataInner() {
   await resourcesReady;
   if (!state.user || !supabase) { Object.assign(state, { saved: new Set(), downloaded: [], avatar: null, isAdmin: false, uploadUntil: 0, username: null }); return; }
   const [s, d] = await Promise.all([
@@ -716,7 +743,18 @@ const pwChecks = (p) => [["8+ characters", p.length >= 8], ["Upper & lower case"
 const pwOk = (p) => pwChecks(p).slice(0, 3).every((c) => c[1]) && !COMMON_PW.includes(p.toLowerCase());
 const lock = { n: 0, until: 0 };   // client-side throttle (Supabase also rate-limits server-side)
 let resendAt = 0;
-function authBad(m) { state.authError = m; state.authInfo = ""; render(); }
+// An e-mail that could not be SENT (rate limit / mail server problem) vs. "that address has no account"
+const emailSendFailed = (e) => !!e && (e.status === 429 || e.status >= 500 || /rate limit|error sending|smtp|too many/i.test(e.message || ""));
+const emailFailMsg = (e) => (e && (e.status === 429 || /rate limit|too many/i.test(e.message || "")))
+  ? "Too many emails were requested. Please wait a few minutes and try again."
+  : "We couldn't send the email right now. Please try again in a few minutes.";
+function signUpErrorMsg(e) {
+  const m = (e && e.message) || "";
+  if (/password/i.test(m)) return "That password is too weak or was found in a data breach. Try another.";
+  if (/already registered|already exists/i.test(m)) return "That email already has an account. Try logging in instead.";
+  return emailFailMsg(e);
+}
+function authBad(m) { state.authError = m; state.authInfo = ""; sfx("error"); render(); }
 function isLocked() {
   const sec = Math.ceil((lock.until - Date.now()) / 1000);
   if (sec > 0) { authBad(`Too many attempts. Try again in ${sec}s.`); return true; }
@@ -725,13 +763,17 @@ function isLocked() {
 function recordFail() { if (++lock.n >= 5) lock.until = Date.now() + 30000 * 2 ** Math.min(lock.n - 5, 4); }
 async function authDone(user) {
   lock.n = 0; state.user = user;
+  sfx(state.authMode === "signup" ? "signup" : "login");
+  // count this login for the admin's Members page (a page refresh is NOT a login)
+  if (supabase) Promise.resolve(supabase.rpc("log_login")).then((r) => { if (r && r.error) console.error(r.error); }).catch(console.error);
   await loadUserData();
   const retry = state.pending;
   Object.assign(state, { authOpen: false, pending: null, authError: "", authInfo: "", otpSent: false, authStep: "form", authForm: {} });
   render(); showToast("Welcome, " + userName() + "!");
   if (retry) retry();
 }
-async function submitAuth(form) {
+async function submitAuth(form) { const done = busyStart(); try { return await submitAuthInner(form); } finally { done(); } }
+async function submitAuthInner(form) {
   if (isLocked()) return;
   const su = state.authMode === "signup", v = (n) => (form.elements[n] ? form.elements[n].value : "");
   const email = v("email").trim().toLowerCase(), password = v("password"), username = v("username").trim();
@@ -743,7 +785,7 @@ async function submitAuth(form) {
     if (password !== v("confirm")) return authBad("Passwords don't match.");
   } else if (!password) return authBad("Enter your password.");
   const btn = form.querySelector('button[type="submit"]');
-  if (btn) { btn.disabled = true; btn.textContent = "Please wait..."; }
+  if (btn) { btn.disabled = true; btn.innerHTML = spin() + " Please wait..."; }
   if (!su) { // "remember me": keep the session (never the password) in this browser
     const keep = form.elements.remember && form.elements.remember.checked;
     localStorage.setItem(REMEMBER_KEY, keep ? "1" : "0");
@@ -763,7 +805,7 @@ async function submitAuth(form) {
   const { data: free } = await supabase.rpc("username_available", { u: username });
   if (free === false) return authBad("That username is taken.");
   const res = await supabase.auth.signUp({ email, password, options: { data: { username } } });
-  if (res.error) return authBad(/password/i.test(res.error.message) ? "That password is too weak or was found in a data breach. Try another." : res.error.message);
+  if (res.error) { console.error(res.error); return authBad(signUpErrorMsg(res.error)); }
   const ids = res.data.user && res.data.user.identities;
   if (ids && !ids.length) return authBad("That email already has an account — try logging in instead.");
   if (res.data.session) return authDone(res.data.session.user);
@@ -771,24 +813,28 @@ async function submitAuth(form) {
   Object.assign(state, { authStep: "verify", authError: "", authInfo: "We sent a 6-digit code to " + email + "." });
   render();
 }
-async function sendOtp(form) {
+async function sendOtp(form) { const done = busyStart(); try { return await sendOtpInner(form); } finally { done(); } }
+async function sendOtpInner(form) {
   if (isLocked()) return;
   const email = form.elements.email.value.trim().toLowerCase();
   state.authForm = { ...state.authForm, email };
   if (!EMAIL_RE.test(email)) return authBad("Enter a valid email address.");
   const btn = form.querySelector('button[type="submit"]');
-  if (btn) { btn.disabled = true; btn.textContent = "Sending..."; }
-  await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+  if (btn) { btn.disabled = true; btn.innerHTML = spin() + " Sending..."; }
+  const sent = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+  if (sent.error) console.error(sent.error);
+  if (emailSendFailed(sent.error)) return authBad(emailFailMsg(sent.error));
   resendAt = Date.now() + 60000; recordFail(); // generic reply: never reveals whether the email has an account
   Object.assign(state, { otpSent: true, authError: "", authInfo: "If an account exists for " + email + ", a 6-digit code is on its way." });
   render();
 }
-async function verifyOtp(form) {
+async function verifyOtp(form) { const done = busyStart(); try { return await verifyOtpInner(form); } finally { done(); } }
+async function verifyOtpInner(form) {
   if (isLocked()) return;
   const token = form.elements.code.value.replace(/\D/g, "");
   if (token.length !== 6) return authBad("Enter the 6-digit code.");
   const btn = form.querySelector('button[type="submit"]');
-  if (btn) { btn.disabled = true; btn.textContent = "Verifying..."; }
+  if (btn) { btn.disabled = true; btn.innerHTML = spin() + " Verifying..."; }
   const { data, error } = await supabase.auth.verifyOtp({ email: state.authForm.email, token, type: state.authMode === "signup" ? "signup" : "email" });
   if (error || !data.session) { recordFail(); return authBad("That code is wrong or expired. Request a new one."); }
   authDone(data.session.user);
@@ -801,10 +847,12 @@ async function resendCode() {
     ? await supabase.auth.resend({ type: "signup", email })
     : await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
   resendAt = Date.now() + 60000;
-  if (error && state.authMode === "signup") return authBad(error.message);
+  if (error) console.error(error);
+  if (error && (state.authMode === "signup" || emailSendFailed(error))) return authBad(emailFailMsg(error));
   state.authError = ""; state.authInfo = "A new code is on its way."; render();
 }
 async function logout() {
+  sfx("logout");
   if (supabase) await supabase.auth.signOut();
   Object.assign(state, { user: null, saved: new Set(), downloaded: [], avatar: null, isAdmin: false, uploadUntil: 0, username: null, avatarOpen: false, editingName: false, codeOpen: false });
   showToast("Logged out");
@@ -813,57 +861,64 @@ async function logout() {
 
 async function toggleSave(id) {
   if (!requireLogin(() => toggleSave(id))) return;
-  if (state.saved.has(id)) {
-    state.saved.delete(id); showToast("Removed from saved");
-    const { error } = await supabase.from("saved_resources").delete().match({ user_id: state.user.id, resource_id: id });
-    if (error) console.error(error);
-  } else {
-    state.saved.add(id); showToast("Saved for later");
-    const { error } = await supabase.from("saved_resources").insert({ user_id: state.user.id, resource_id: id });
-    if (error) console.error(error);
-  }
+  if (saveBusy.has(id)) return;
+  const adding = !state.saved.has(id);
+  saveBusy.add(id); render();                                   // the heart shows a spinner while we really save
+  const done = busyStart();
+  const q = adding ? await supabase.from("saved_resources").insert({ user_id: state.user.id, resource_id: id })
+                   : await supabase.from("saved_resources").delete().match({ user_id: state.user.id, resource_id: id });
+  done(); saveBusy.delete(id);
+  if (q.error) { console.error(q.error); sfx("error"); showToast("Couldn't update your saved list. Please try again."); return; }
+  if (adding) state.saved.add(id); else state.saved.delete(id);
+  sfx(adding ? "save" : "unsave");
+  if (adding && window.Motion) window.Motion.pop(id);
+  showToast(adding ? "Saved for later" : "Removed from saved");
 }
 
 // ==== VIEW / DOWNLOAD / COPY LINK (NEW — these now do real things) ====
-function viewResource(id) {
+// "Open PDF" opens the browser's own viewer (which has Save / Print), so it needs a login like Download does.
+async function viewResource(id) {
+  if (!requireLogin(() => viewResource(id))) return;
   const r = resourcesById[id];
-  const url = resourceFileUrl(r);
-  if (!url) { showToast("No file is attached to this resource yet"); return; }
-  window.open(url, "_blank", "noopener");
-}async function downloadResource(id) {
+  if (!r || !r.filePath) { showToast("No file is attached to this resource yet"); return; }
+  const win = window.open("", "_blank");               // opened first so phone pop-up blockers allow it
+  const done = busyStart();
+  const url = await fileUrlFor(r);
+  done();
+  if (win && url) win.location.href = url;
+  else { if (win) win.close(); showToast("Couldn't open the file. Please try again."); }
+}
+async function downloadResource(id) {
   if (!requireLogin(() => downloadResource(id))) return;
   const r = resourcesById[id];
+  if (!r || !r.filePath) { showToast("No real file is attached yet"); return; }
+  if (dlBusy.has(id)) return;
+  dlBusy.add(id); render();                                     // "Downloading..." stays until the file has really arrived or failed
+  const done = busyStart();
+  let blob = null;
+  try {
+    const { data, error } = await supabase.storage.from(SUPABASE_BUCKET).download(r.filePath);
+    if (error || !data) throw error || new Error("empty download");
+    blob = data;
+  } catch (e) { console.error(e); }
+  done(); dlBusy.delete(id);
+  if (!blob) { sfx("error"); showToast("Download failed. Please try again."); render(); return; }
 
-  if (!r || !r.filePath) {
-    showToast("No real file is attached yet");
-    return;
-  }
-
-  const { data, error } = await supabase.storage
-    .from(SUPABASE_BUCKET)
-    .download(r.filePath);
-
-  if (error) {
-    showToast("Download failed: " + error.message);
-    return;
-  }
-
-  const blobUrl = URL.createObjectURL(data);
+  const blobUrl = URL.createObjectURL(blob);
   const link = document.createElement("a");
-
   link.href = blobUrl;
   link.download = r.filePath.split("/").pop() || "study-material.pdf";
-
   document.body.appendChild(link);
   link.click();
   link.remove();
-
   URL.revokeObjectURL(blobUrl);
+  sfx("download");
 
   // remember this download for the user (and for the admin's records)
   const { error: logErr } = await supabase.from("downloads").insert({ user_id: state.user.id, resource_id: id });
   if (logErr) console.error(logErr);
-  else { state.downloaded = [id, ...state.downloaded.filter((x) => x !== id)].slice(0, 6); render(); }
+  else state.downloaded = [id, ...state.downloaded.filter((x) => x !== id)].slice(0, 6);
+  render();
 }
 function copyResourceLink(id) {
   const r = resourcesById[id];
@@ -871,6 +926,77 @@ function copyResourceLink(id) {
   navigator.clipboard.writeText(r.url)
     .then(() => showToast("Link copied to clipboard"))
     .catch(() => showToast("Couldn't copy link"));
+}
+
+const pdfLoader = (t) => `<div class="pdfv-load"><i class="mo-spin mo-spin-dark"></i><span class="pdfv-t">${esc(t || "Loading preview...")}</span><div class="mo-prog"><i></i></div></div>`;
+async function fetchBytes(url, onPct) {                          // reads the file and reports the REAL percentage received
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error("file " + resp.status);
+  const total = Number(resp.headers.get("content-length")) || 0;
+  if (!resp.body || !total) return new Uint8Array(await resp.arrayBuffer());
+  const reader = resp.body.getReader(), parts = []; let got = 0;
+  for (;;) { const { done, value } = await reader.read(); if (done) break; parts.push(value); got += value.length; onPct(Math.min(99, Math.round((got / total) * 100))); }
+  const out = new Uint8Array(got); let o = 0; for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+/* ---------- read-only PDF preview ----------
+   PDF.js (hosted in the /pdfjs folder) draws the pages as pictures on the page.
+   There is no toolbar, so no Save / Download / Print button, and right-click is off. */
+const pdfv = { id: null, node: null, run: 0 };
+let pdfjsReady = null;
+function loadPdfJs() {
+  if (!pdfjsReady) {
+    pdfjsReady = import("./pdfjs/pdf.min.js").then((lib) => { lib.GlobalWorkerOptions.workerSrc = "pdfjs/pdf.worker.min.js"; return lib; });
+    pdfjsReady.catch(() => { pdfjsReady = null; });
+  }
+  return pdfjsReady;
+}
+async function renderPdfInto(node, r, runId) {
+  const say = (t) => { node.innerHTML = `<p class="pdfv-msg">${esc(t)}</p>`; };
+  const done = busyStart();
+  const pct = (n) => { const t = node.querySelector(".pdfv-t"), b = node.querySelector(".mo-prog i"); if (t) t.textContent = "Loading preview... " + n + "%"; if (b) b.style.width = n + "%"; };
+  try {
+    const [lib, url] = await Promise.all([loadPdfJs(), fileUrlFor(r)]);
+    if (runId !== pdfv.run) return;
+    if (!url) return say("No file is attached to this resource yet.");
+    const data = await fetchBytes(url, pct);
+    if (runId !== pdfv.run) return;
+    pct(100);
+    const doc = await lib.getDocument({ data, isEvalSupported: false, enableScripting: false }).promise;
+    if (runId !== pdfv.run) return;
+    node.innerHTML = "";
+    const width = Math.max(280, (node.clientWidth || 700) - 20), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const total = Math.min(doc.numPages, 60);
+    for (let i = 1; i <= total; i++) {
+      if (runId !== pdfv.run) return;
+      const page = await doc.getPage(i), base = page.getViewport({ scale: 1 });
+      const vp = page.getViewport({ scale: (width / base.width) * dpr });
+      const cv = document.createElement("canvas");
+      cv.className = "pdfv-page"; cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
+      node.appendChild(cv);
+      await page.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+    }
+    sfx("ready");
+    if (doc.numPages > total) node.insertAdjacentHTML("beforeend", `<p class="pdfv-msg">Preview shows the first ${total} pages. Sign in and download for the full file.</p>`);
+  } catch (e) {
+    console.error(e);
+    if (runId === pdfv.run) say("Couldn't load the preview. Please try again in a moment.");
+  } finally { done(); }
+}
+function mountPdfViewer() {
+  const host = document.getElementById("pdfv"); if (!host) return;
+  const rid = host.getAttribute("data-rid");
+  if (pdfv.node && pdfv.id === rid) { host.replaceWith(pdfv.node); pdfv.node.scrollTop = pdfv.node._st || 0; return; }   // already drawn: reuse it
+  const r = resourcesById[rid]; if (!r) return;
+  pdfv.id = rid; pdfv.run++;
+  const node = document.createElement("div");
+  node.id = "pdfv"; node.className = "pdf-preview pdfv"; node.setAttribute("data-rid", rid);
+  node.innerHTML = pdfLoader();
+  node.addEventListener("contextmenu", (e) => e.preventDefault());
+  node.addEventListener("dragstart", (e) => e.preventDefault());
+  node.addEventListener("scroll", () => { node._st = node.scrollTop; });
+  pdfv.node = node; host.replaceWith(node);
+  renderPdfInto(node, r, pdfv.run);
 }
 
 function setUnitFilter(v) { state.unitFilter = v; render(); }
@@ -1276,8 +1402,8 @@ function renderResourceCard(r) {
         ${r.verified ? `<span class="badge badge-leaf">${icon("check", 11)} Verified</span>` : ""}
         ${!r.url ? `<span class="badge">Demo</span>` : ""}
       </span>
-      <button class="heart-btn" data-action="toggle-save" data-id="${esc(r.id)}" aria-label="Save">
-        ${isSaved ? icon("heart", 13, "color:#F0523A;fill:#F0523A;") : icon("heart", 13)}
+      <button class="heart-btn ${saveBusy.has(r.id) ? "is-busy" : ""}" data-action="toggle-save" data-id="${esc(r.id)}" aria-label="Save">
+        ${saveBusy.has(r.id) ? spin(true) : isSaved ? icon("heart", 13, "color:#F0523A;fill:#F0523A;") : icon("heart", 13)}
       </button>
     </div>
     <div class="font-display res-title">${esc(r.title)}</div>
@@ -1286,7 +1412,7 @@ function renderResourceCard(r) {
     <div class="res-meta2">${r.size ? r.size + " MB · " : ""}Added ${r.date}</div>
     <div class="res-actions">
       <button class="btn btn-secondary btn-sm" data-action="open-resource" data-id="${esc(r.id)}">${icon("eye", 13)} View</button>
-      <button class="btn btn-primary btn-sm" data-action="download-resource" data-id="${esc(r.id)}">${icon("download", 13)} Download</button>
+      <button class="btn btn-primary btn-sm ${dlBusy.has(r.id) ? "is-busy" : ""}" data-action="download-resource" data-id="${esc(r.id)}">${dlBusy.has(r.id) ? spin() + " Downloading..." : icon("download", 13) + " Download"}</button>
     </div>
   </div>`;
 }
@@ -1328,20 +1454,16 @@ function renderResourceModal() {
         </div>
         <p class="modal-desc">${cat.desc}. Reviewed for accuracy before publishing so you can revise with confidence.</p>
        ${(() => {
-         const fileUrl = resourceFileUrl(resource);
-         if (!fileUrl) return `<div class="preview-box">${icon("fileText", 28, "color:var(--ink-66)")}<span>No file is attached to this resource yet.</span></div>`;
-         const pdfPath = resource.url || resource.filePath || "";
-         // PDFs preview directly. Word/PowerPoint files are routed through
-         // Google's viewer so they still preview instead of just downloading.
-         const src = isPdfPath(pdfPath) ? fileUrl : `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`;
-         return `<iframe class="pdf-preview" src="${esc(src)}" title="${esc(resource.title)}" loading="lazy"></iframe>`;
+         if (!resource.filePath) return `<div class="preview-box">${icon("fileText", 28, "color:var(--ink-66)")}<span>No file is attached to this resource yet.</span></div>`;
+         if (!isPdfPath(resource.filePath)) return `<div class="preview-box">${icon("fileText", 28, "color:var(--ink-66)")}<span>Preview isn't available for this file type.${state.user ? "" : " Sign in to download it."}</span></div>`;
+         // read-only viewer (see mountPdfViewer): pages are drawn on screen, there is no Save / Print / Download button
+         return `<div class="pdf-preview pdfv" id="pdfv" data-rid="${esc(resource.id)}">${pdfLoader()}</div>${state.user ? "" : `<p class="form-note" style="margin-top:8px;">👀 Preview only. Sign in to download this file.</p>`}`;
        })()}
         <div class="modal-actions">
           <button class="btn btn-primary" data-action="view-resource" data-id="${esc(resource.id)}">${icon("eye", 15)} Open PDF</button>
-          <button class="btn btn-secondary" data-action="download-resource" data-id="${esc(resource.id)}">${icon("download", 15)} Download</button>
-          <button class="btn btn-secondary" data-action="copy-link" data-id="${esc(resource.id)}">${icon("clipboard", 15)} Copy Link</button>
-          <button class="save-toggle ${isSaved ? "active" : ""}" data-action="toggle-save" data-id="${esc(resource.id)}">
-            ${isSaved ? icon("heart", 16, "color:#F0523A;fill:#F0523A;") : icon("heart", 16)}
+          <button class="btn btn-secondary ${dlBusy.has(resource.id) ? "is-busy" : ""}" data-action="download-resource" data-id="${esc(resource.id)}">${dlBusy.has(resource.id) ? spin(true) + " Downloading..." : icon("download", 15) + " Download"}</button>
+          <button class="save-toggle ${isSaved ? "active" : ""} ${saveBusy.has(resource.id) ? "is-busy" : ""}" data-action="toggle-save" data-id="${esc(resource.id)}">
+            ${saveBusy.has(resource.id) ? spin(true) : isSaved ? icon("heart", 16, "color:#F0523A;fill:#F0523A;") : icon("heart", 16)}
           </button>
         </div>
         ${related.length ? `
@@ -1364,7 +1486,7 @@ function pwField(label, name, ac, ph) {
 function renderAuthModal() {
   if (!state.authOpen) return "";
   const su = state.authMode === "signup", f = state.authForm || {}, verify = su && state.authStep === "verify";
-  const tab = su ? "password" : (state.authTab || "password");
+  const tab = (su || !EMAIL_CODES) ? "password" : (state.authTab || "password");
   const err = state.authError ? `<p class="form-note auth-err" role="alert">${esc(state.authError)}</p>` : "";
   const inf = state.authInfo ? `<p class="form-note auth-ok">${esc(state.authInfo)}</p>` : "";
   const email = `<div class="field"><label>Email</label><input name="email" type="email" autocomplete="email" placeholder="you@college.edu" value="${esc(f.email || localStorage.getItem("lumos-email") || "")}" maxlength="254" required /></div>`;
@@ -1385,8 +1507,8 @@ function renderAuthModal() {
       <ul class="pw-rules" id="pw-rules">${pwChecks("").map((c) => `<li>${c[0]}</li>`).join("")}</ul>
       ${pwField("Confirm password", "confirm", "new-password", "Reset password")}
       ${err}${inf}${go("Create account")}</form>
-    <p class="form-note center">We'll email a 6-digit code to verify it's really you.</p>`;
-  const body = verify ? codeForm : `    ${su ? "" : `<div class="tab-row"><button type="button" class="chip ${tab === "password" ? "active" : ""}" data-action="auth-tab" data-tab="password">Password</button><button type="button" class="chip ${tab === "otp" ? "active" : ""}" data-action="auth-tab" data-tab="otp">Email code</button></div>`}
+    ${EMAIL_CODES ? `<p class="form-note center">We'll email you a 6-digit code (and a link) to confirm your address.</p>` : ""}`;
+  const body = verify ? codeForm : `    ${su || !EMAIL_CODES ? "" : `<div class="tab-row"><button type="button" class="chip ${tab === "password" ? "active" : ""}" data-action="auth-tab" data-tab="password">Password</button><button type="button" class="chip ${tab === "otp" ? "active" : ""}" data-action="auth-tab" data-tab="otp">Email code</button></div>`}
     ${su ? signupForm : tab === "password" ? loginForm : (state.otpSent ? codeForm : sendForm)}`;
   const title = verify || (!su && tab === "otp" && state.otpSent) ? "Check your email" : su ? "Create your account" : "Welcome back";
   return `
@@ -1426,7 +1548,7 @@ function renderProfilePage() {
   const card = (cls, ic, title, sub, action, extra = "") => `<button class="pf-card ${cls}" data-action="${action}" ${extra}><span class="pf-ic">${icon(ic, 24)}</span><b class="font-display">${title}</b><span class="pf-sub">${sub}</span></button>`;
   const who = state.editingName
     ? `<form class="pf-edit" data-action="save-name"><input name="username" maxlength="20" value="${esc(userName())}" autocomplete="off" required aria-label="Your name" /><div class="pf-row"><button type="submit" class="pf-btn pf-main">Save</button><button type="button" class="pf-btn pf-line" data-action="cancel-name">Cancel</button></div></form>`
-    : `<h1 class="font-display pf-name">${esc(userName())}</h1><p class="pf-mail">${esc((state.user && state.user.email) || "")}</p>${state.isAdmin ? `<span class="pf-badge">Admin</span><button class="pf-btn pf-line" data-action="set-page" data-page="admin">Review contributions</button>` : ""}<button class="pf-btn pf-main" data-action="edit-name">Edit name</button>`;
+    : `<h1 class="font-display pf-name">${esc(userName())}</h1><p class="pf-mail">${esc((state.user && state.user.email) || "")}</p>${state.isAdmin ? `<span class="pf-badge">Admin</span><button class="pf-btn pf-line" data-action="c-adm-review">Review contributions</button><button class="pf-btn pf-line" data-action="c-adm-members">Members &amp; logins</button>` : ""}<button class="pf-btn pf-main" data-action="edit-name">Edit name</button>`;
   return `
   <div class="wrap pf">
     <aside class="pf-side">
@@ -1558,6 +1680,7 @@ function render() {
   `;
   const app = document.getElementById("app");
   app.innerHTML = html;
+  mountPdfViewer();
 
   // restore focus to search input if the overlay is open (innerHTML replace loses focus)
   if (state.searchOpen) {
@@ -1594,7 +1717,6 @@ document.addEventListener("click", (e) => {
     // ==== CHANGED: these now open/download/copy the REAL file (see functions above) ====
     case "view-resource": viewResource(el.getAttribute("data-id")); break;
     case "download-resource": downloadResource(el.getAttribute("data-id")); break;
-    case "copy-link": copyResourceLink(el.getAttribute("data-id")); break;
     case "set-unit-filter": setUnitFilter(el.getAttribute("data-unit")); break;
     case "quick-category": quickCategory(el.getAttribute("data-category")); break;
     case "open-search": setState({ searchOpen: true }); break;
@@ -1606,6 +1728,7 @@ document.addEventListener("click", (e) => {
     }    case "close-modal": {
   const isBackdrop = el.classList.contains('modal-overlay');
   if (isBackdrop && e.target !== el) break; // click landed inside the panel content, not the dark backdrop — ignore it
+  pdfv.node = null; pdfv.id = null; pdfv.run++;
   setState({ activeResourceId: null });
   break;
 }
@@ -1675,6 +1798,31 @@ document.addEventListener("submit", (e) => {
 /* ============================== INIT ============================== */
 render();
 resourcesReady = loadUploadedResources();
+// The button / link in the confirmation e-mail brings people back here with ?token_hash=...&type=...
+(async function emailLinkSignIn() {
+  const p = new URLSearchParams(window.location.search);
+  const token_hash = p.get("token_hash"), type = p.get("type");
+  if (!token_hash || !type || !supabase) return;
+  history.replaceState(null, "", window.location.pathname);          // remove the one-time token from the address bar
+  const attempt = (t) => supabase.auth.verifyOtp({ token_hash, type: t });
+  let res = await attempt(type);
+  if (res.error) { const alt = type === "signup" ? "email" : type === "email" ? "signup" : null; if (alt) res = await attempt(alt); }
+  if (res.error || !res.data || !res.data.session) {
+    console.error(res.error);
+    showToast("That link has expired or was already used. Please log in, or ask for a new code.");
+    return;
+  }
+  state.authMode = "login";
+  await authDone(res.data.session.user);
+})();
+(function authLinkErrorFromUrl() {
+  const p = new URLSearchParams(window.location.search + "&" + window.location.hash.replace(/^#/, ""));
+  const d = p.get("error_description") || p.get("error");
+  if (!d) return;
+  console.error("Auth link error:", p.get("error_code"), d);
+  history.replaceState(null, "", window.location.pathname);
+  setTimeout(() => showToast("That email link can't be used here. Please log in with the 6-digit code instead."), 400);
+})();
 // Supabase keeps the login in the browser, so returning students are recognised
 // automatically (this fires once on page load with the saved session, if any).
 if (supabase) {
