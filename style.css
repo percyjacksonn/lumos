@@ -773,3 +773,410 @@ div.pdf-preview{overflow:auto;background:#f4f1e6;-webkit-user-select:none;user-s
 /* GSAP handles the Contribute page entrance when motion is on */
 .mo-on .c-in{animation:none !important;}
 @media (prefers-reduced-motion:reduce){.mo-bg3d{display:none;}.mo-spin{animation-duration:1.6s;}}
+
+/* =====================================================================
+   PHONE LAYOUT: single-column reading flow, stable type, no clipped text
+   ===================================================================== */
+/* ============================================================
+   MOBILE ONLY — GLOBAL PADDING & OVERFLOW FIX
+   Desktop remains completely untouched.
+   Add AFTER your existing mobile CSS.
+============================================================ */
+
+@media screen and (max-width:639px){
+
+  /* 1. SAFE MOBILE WIDTH */
+
+  *,
+  *::before,
+  *::after{
+    box-sizing:border-box;
+  }
+
+  html{
+    width:100%;
+    max-width:100%;
+    overflow-x:clip;
+  }
+
+  body{
+    width:100%;
+    max-width:100%;
+    margin:0;
+    overflow-x:clip;
+  }
+
+  /* 2. GLOBAL SIDE SPACING */
+
+  :root{
+    --mobile-space:16px;
+  }
+
+  /* Main page containers */
+
+  .wrap{
+    width:100%;
+    max-width:100%;
+    padding-left:var(--mobile-space);
+    padding-right:var(--mobile-space);
+    margin-left:auto;
+    margin-right:auto;
+    min-width:0;
+  }
+
+  /* 3. ALL PAGE SECTIONS */
+
+  main,
+  section,
+  header,
+  footer{
+    max-width:100%;
+    min-width:0;
+  }
+
+  .section,
+  .hero,
+  .upload-wrap,
+  .pf,
+  .c-wrap{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+
+  /* Page-specific containers */
+
+  .upload-wrap,
+  .pf,
+  .c-wrap{
+    padding-left:var(--mobile-space);
+    padding-right:var(--mobile-space);
+  }
+
+  /* 4. HEADER */
+
+  .header-inner{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+
+  .brand,
+  .header-actions{
+    min-width:0;
+  }
+
+  .brand-name{
+    overflow-wrap:anywhere;
+  }
+
+  /* 5. HERO SECTION */
+
+  .hero-inner{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+
+  .hero-title,
+  .hero-sub{
+    max-width:100%;
+    overflow-wrap:break-word;
+  }
+
+  .hero-actions,
+  .hero-search,
+  .hero-stats{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+
+  .hero-actions .btn{
+    max-width:100%;
+  }
+
+  /* 6. ALL GRIDS */
+
+  .quick-grid,
+  .year-grid,
+  .sem-grid,
+  .stat-grid,
+  .dash-grid,
+  .footer-grid,
+  .info-grid,
+  .pf-grid{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+
+  .quick-grid,
+  .year-grid,
+  .sem-grid,
+  .stat-grid,
+  .dash-grid,
+  .footer-grid,
+  .info-grid{
+    grid-template-columns:minmax(0,1fr);
+  }
+
+  /* 7. CARDS */
+
+  .dept-card,
+  .subject-card,
+  .teacher-card,
+  .resource-card,
+  .year-card,
+  .sem-card,
+  .step-card,
+  .quick-card,
+  .pf-card{
+    max-width:100%;
+    min-width:0;
+  }
+
+  .dept-title,
+  .dept-blurb,
+  .subject-name,
+  .subject-teachers,
+  .teacher-name,
+  .res-title,
+  .res-meta,
+  .res-meta2,
+  .step-title,
+  .step-body{
+    max-width:100%;
+    min-width:0;
+    overflow-wrap:anywhere;
+  }
+
+  /* 8. BREADCRUMBS AND CHIPS */
+
+  .breadcrumb{
+    max-width:100%;
+    min-width:0;
+    flex-wrap:wrap;
+  }
+
+  .crumb{
+    max-width:100%;
+    overflow-wrap:anywhere;
+  }
+
+  .unit-chips,
+  .c-chips{
+    max-width:100%;
+    min-width:0;
+    flex-wrap:wrap;
+  }
+
+  .unit-chip,
+  .c-chip{
+    max-width:100%;
+    min-width:0;
+    overflow-wrap:anywhere;
+  }
+
+  /* 9. MODALS */
+
+  .modal-overlay{
+    width:100%;
+    max-width:100%;
+    padding-left:0;
+    padding-right:0;
+  }
+
+  .modal-panel{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+
+  .modal-content{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    padding-left:var(--mobile-space);
+    padding-right:var(--mobile-space);
+  }
+
+  .modal-title{
+    max-width:100%;
+    overflow-wrap:anywhere;
+  }
+
+  .auth-seg,
+  .social-row,
+  .pw-rules{
+    max-width:100%;
+    min-width:0;
+  }
+
+  /* 10. PROFILE PAGE */
+
+  .pf-side,
+  .pf-panel,
+  .pf-row,
+  .pf-code,
+  .pf-pick{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+
+  .pf-name,
+  .pf-sub{
+    max-width:100%;
+    overflow-wrap:anywhere;
+  }
+
+  .pf-code input{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+
+  .pf-grid{
+    grid-template-columns:repeat(
+      auto-fit,
+      minmax(min(100%,140px),1fr)
+    );
+  }
+
+  /* 11. CONTRIBUTION PAGE */
+
+  .c-hero,
+  .c-panel,
+  .c-form,
+  .c-row,
+  .c-file{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+
+  .c-title,
+  .c-lead,
+  .c-h,
+  .c-muted{
+    max-width:100%;
+    overflow-wrap:anywhere;
+  }
+
+  .c-steps{
+    max-width:100%;
+    min-width:0;
+  }
+
+  .c-step{
+    min-width:0;
+  }
+
+  /* Tables scroll internally instead of
+     pushing the entire mobile page sideways */
+
+  .c-table{
+    display:block;
+    width:100%;
+    max-width:100%;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  /* 12. INPUTS AND BUTTONS */
+
+  input,
+  textarea,
+  select,
+  button,
+  .btn{
+    max-width:100%;
+    min-width:0;
+    box-sizing:border-box;
+  }
+
+  input,
+  textarea,
+  select{
+    width:100%;
+  }
+
+  textarea{
+    resize:vertical;
+  }
+
+  button,
+  .btn{
+    overflow-wrap:break-word;
+  }
+
+  /* 13. IMAGES AND MEDIA */
+
+  img,
+  video,
+  canvas,
+  svg{
+    max-width:100%;
+  }
+
+  img,
+  video{
+    height:auto;
+  }
+
+  /* 14. FOOTER */
+
+  .footer-grid{
+    width:100%;
+    max-width:100%;
+    padding-left:0;
+    padding-right:0;
+  }
+
+  .footer-brand,
+  .footer-col,
+  .footer-links,
+  .footer-about{
+    max-width:100%;
+    min-width:0;
+    padding:10px;
+  }
+
+  .footer-bottom{
+    max-width:100%;
+    min-width:0;
+    padding:10px;
+    overflow-wrap:anywhere;
+  }
+
+  /* 15. TOAST NOTIFICATIONS */
+
+  .toast{
+    width:calc(100% - 32px);
+    max-width:calc(100% - 32px);
+    left:16px;
+    right:16px;
+    margin-left:0;
+    margin-right:0;
+    transform:none;
+  }
+
+  /* 16. VERY SMALL PHONES */
+
+  @media (max-width:359px){
+
+    :root{
+      --mobile-space:12px;
+    }
+
+    .toast{
+      width:calc(100% - 24px);
+      max-width:calc(100% - 24px);
+      left:12px;
+      right:12px;
+    }
+
+  }
+
+}
