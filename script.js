@@ -1620,11 +1620,6 @@ function renderFooter() {
           <button data-action="set-page" data-page="profile">Profile</button>
         </div>
       </div>
-      <div class="footer-col">
-        <span class="eyebrow">About</span>
-       
-        <div class="footer-about">
-          <span> </span>
 <span class="eyebrow">Connect</span>
           <span>Have any Issues Or Want to appreciate ..😉Feel Free to shoot us a Mail or Msg using Our Socials </span>
 
