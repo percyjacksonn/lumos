@@ -1622,19 +1622,7 @@ function renderFooter() {
       </div>
       <div class="footer-col">
         <span class="eyebrow">About</span>
-        <span>
-
-Study Nest started as a second-year mini project.
-<br>
-the original plan was pretty simple —<br><br>
-
-somewhere along the way, I started caring about the little things.
-the layout, the tiny details, the way everything feels
-when you actually use it.<br><br>
-
-so yeah, this is what came out of it.<br><br>
-still a work in progress.<br>
-but then again, most good things are.</span>
+       
         <div class="footer-about">
           <span> </span>
 <span class="eyebrow">Connect</span>
