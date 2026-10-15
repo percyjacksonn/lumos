@@ -1611,15 +1611,6 @@ function renderFooter() {
         <p>Everything you need. One organised place.<br><br>Built for Us the Students to Access the Resources to Our Academic(;<br> <br>
           The Scattered Resources In Google classroom,Whatsapp,Drive,etc.. Is Now At One Place <br> <br>All You Need To do is Log in To access the Resources/Pdf<br><br> </p><h3>There is No Right <i>"Time"</i>To Start.. Get Started Now !! </h3>
       </div>
-      <div class="footer-col">
-        <span class="eyebrow">Explore</span>
-        <div class="footer-links">
-          <button data-action="go-home">Home</button>
-          <button data-action="go-browse">Courses</button>
-          <button data-action="set-page" data-page="browse">Notes</button>
-          <button data-action="set-page" data-page="profile">Profile</button>
-        </div>
-      </div>
 <span class="eyebrow">Connect</span>
           <span>Have any Issues Or Want to appreciate ..😉Feel Free to shoot us a Mail or Msg using Our Socials </span>
 
