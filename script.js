@@ -1625,19 +1625,6 @@ function renderFooter() {
       </div>
       <div class="footer-col">
         <span class="eyebrow">About</span>
-        <span>
-
-Study Nest started as a second-year mini project.
-<br>
-the original plan was pretty simple —<br><br>
-
-somewhere along the way, I started caring about the little things.
-the layout, the tiny details, the way everything feels
-when you actually use it.<br><br>
-
-so yeah, this is what came out of it.<br><br>
-still a work in progress.<br>
-but then again, most good things are.</span>
         <div class="footer-about">
           <span> </span>
 <span class="eyebrow">Connect</span>
@@ -1654,7 +1641,7 @@ but then again, most good things are.</span>
         </div>
       </div>
     </div>
-    <div class="footer-bottom">©Copyright lumos· A study-material sharing platform created by Pooja and the team As our 2nd yr Mini Project </div>
+    <div class="footer-bottom">©Copyright lumos· A study-material sharing platform created as 2nd yr Mini Project </div>
   </footer>`;
 }
 
