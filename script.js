@@ -7,9 +7,6 @@
 const supabaseUrl = "https://jlnbezpewkuqrwmcljdv.supabase.co";
 const supabaseKey = "sb_publishable_9mvDqyktUkE0JfMAJv7ukA_sJXNFxdz";
 
-// FIX: guard so the whole site doesn't die if the Supabase CDN script fails to load
-// true  = new members confirm their e-mail with a 6-digit code OR the button/link in the e-mail
-// false = no confirmation (switch "Confirm email" OFF in Supabase too)
 const EMAIL_CODES = true;
 const REMEMBER_KEY = "lumos-remember"; // "0" = forget when tab closes
 const authStorage = {
@@ -1505,9 +1502,9 @@ function renderAuthModal() {
       ${email}${pwField("Password", "password", "new-password", "8+ chars, upper, lower, number")}
       <div class="pw-meter" id="pw-meter"><i></i><i></i><i></i><i></i></div>
       <ul class="pw-rules" id="pw-rules">${pwChecks("").map((c) => `<li>${c[0]}</li>`).join("")}</ul>
-      ${pwField("Confirm password", "confirm", "new-password", "Reset password")}
+      ${pwField("Confirm password", "confirm", "new-password", "Retype password")}
       ${err}${inf}${go("Create account")}</form>
-    ${EMAIL_CODES ? `<p class="form-note center">We'll email you a 6-digit code (and a link) to confirm your address.</p>` : ""}`;
+    ${EMAIL_CODES ? `<p class="form-note center">We'll email you a 6-digit code or a link to confirm your address.</p>` : ""}`;
   const body = verify ? codeForm : `    ${su || !EMAIL_CODES ? "" : `<div class="tab-row"><button type="button" class="chip ${tab === "password" ? "active" : ""}" data-action="auth-tab" data-tab="password">Password</button><button type="button" class="chip ${tab === "otp" ? "active" : ""}" data-action="auth-tab" data-tab="otp">Email code</button></div>`}
     ${su ? signupForm : tab === "password" ? loginForm : (state.otpSent ? codeForm : sendForm)}`;
   const title = verify || (!su && tab === "otp" && state.otpSent) ? "Check your email" : su ? "Create your account" : "Welcome back";
@@ -1625,6 +1622,19 @@ function renderFooter() {
       </div>
       <div class="footer-col">
         <span class="eyebrow">About</span>
+        <span>
+
+Study Nest started as a second-year mini project.
+<br>
+the original plan was pretty simple —<br><br>
+
+somewhere along the way, I started caring about the little things.
+the layout, the tiny details, the way everything feels
+when you actually use it.<br><br>
+
+so yeah, this is what came out of it.<br><br>
+still a work in progress.<br>
+but then again, most good things are.</span>
         <div class="footer-about">
           <span> </span>
 <span class="eyebrow">Connect</span>
@@ -1641,7 +1651,7 @@ function renderFooter() {
         </div>
       </div>
     </div>
-    <div class="footer-bottom">©Copyright lumos· A study-material sharing platform created as 2nd yr Mini Project </div>
+    <div class="footer-bottom">©Copyright lumos· A study-material sharing platform created by Pooja and the team As our 2nd yr Mini Project </div>
   </footer>`;
 }
 
