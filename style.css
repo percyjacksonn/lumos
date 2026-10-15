@@ -876,6 +876,7 @@ div.pdf-preview{overflow:auto;background:#f4f1e6;-webkit-user-select:none;user-s
     width:100%;
     max-width:100%;
     min-width:0;
+    padding:10px;
   }
 
   .hero-title,
@@ -924,16 +925,20 @@ div.pdf-preview{overflow:auto;background:#f4f1e6;-webkit-user-select:none;user-s
   /* 7. CARDS */
 
   .dept-card,
-  .subject-card,
+  .subject-card{ margin:12px;}
   .teacher-card,
-  .resource-card,
-  .year-card,
-  .sem-card,
+  .resource-card{ margin:15px;}
+  .year-card{
+   
+    margin:12px;
+  }
+  .sem-card{ margin:12px;}
   .step-card,
   .quick-card,
   .pf-card{
     max-width:100%;
     min-width:0;
+    
   }
 
   .dept-title,
@@ -957,6 +962,7 @@ div.pdf-preview{overflow:auto;background:#f4f1e6;-webkit-user-select:none;user-s
     max-width:100%;
     min-width:0;
     flex-wrap:wrap;
+   
   }
 
   .crumb{
@@ -1104,11 +1110,13 @@ div.pdf-preview{overflow:auto;background:#f4f1e6;-webkit-user-select:none;user-s
 
   textarea{
     resize:vertical;
+
   }
 
   button,
   .btn{
     overflow-wrap:break-word;
+    
   }
 
   /* 13. IMAGES AND MEDIA */
