@@ -95,35 +95,10 @@ flowchart LR
 <img src="https://img.shields.io/badge/GitHub%20Pages-181717?style=for-the-badge&logo=github&logoColor=white"/>
 
 </div>
-
-```mermaid
-flowchart TD
-    U[🌐 Browser<br/>HTML · CSS · JavaScript] -->|login, data| S[(☁️ Supabase)]
-    S --> A[Auth<br/>accounts + sessions]
-    S --> P[(Postgres<br/>resources · profiles · saved)]
-    S --> B[Storage<br/>study-materials PDFs]
-    P -->|trigger| M[✉️ Email alert to admin]
-```
-
 No framework and no build step: plain HTML, CSS and JavaScript talking to Supabase, hosted free on GitHub Pages.
 
 ---
 
-
----
-
-## 📁 Project files
-
-```
-lumos-/
-├── index.html        the page shell
-├── style.css         the whole look: doodle cards, colours, animations
-├── script.js         browsing, search, login, profile, saved, downloads
-├── contribute.js     the contribution portal + admin review page
-└── images/           screenshots used in this README
-```
-
----
 
 ## 🍴 Fork & improve
 
