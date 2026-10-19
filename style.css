@@ -732,7 +732,12 @@ svg.ic{ stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; st
    ADDITIONS ONLY (nothing above this line was changed):
    read-only PDF preview + admin Members & logins tables
    ===================================================================== */
-div.pdf-preview{overflow:auto;background:#f4f1e6;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+div.pdf-preview{overflow:auto;background:#f4f1e6;-webkit-touch-callout:none;}.textLayer {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  pointer-events: auto !important;
+  cursor: text;
+}
 .pdfv-page{display:block;width:100%;height:auto;margin:0 0 8px;background:#fff;pointer-events:none;}
 .pdfv-msg{padding:22px 12px;text-align:center;font-weight:700;font-size:14px;color:var(--ink-80);}
 .c-tablewrap{overflow-x:auto;border:2.5px solid var(--ink);border-radius:16px;background:#fff;box-shadow:4px 4px 0 var(--ink);margin-top:12px;}
@@ -775,416 +780,384 @@ div.pdf-preview{overflow:auto;background:#f4f1e6;-webkit-user-select:none;user-s
 @media (prefers-reduced-motion:reduce){.mo-bg3d{display:none;}.mo-spin{animation-duration:1.6s;}}
 
 /* =====================================================================
-   PHONE LAYOUT: single-column reading flow, stable type, no clipped text
+   PHONE LAYOUT (MOBILE ONLY)  -  max-width:639px
+   Same look as desktop, just scaled down to fit a phone.
+   Desktop / tablet (640px and up) is NOT affected by anything below.
    ===================================================================== */
-/* ============================================================
-   MOBILE ONLY — GLOBAL PADDING & OVERFLOW FIX
-   Desktop remains completely untouched.
-   Add AFTER your existing mobile CSS.
-============================================================ */
 
 @media screen and (max-width:639px){
 
-  /* 1. SAFE MOBILE WIDTH */
+  /* 1. BASE: nothing may poke out of the screen ---------------------- */
+  :root{ --mobile-space:18px; }
 
-  *,
-  *::before,
-  *::after{
-    box-sizing:border-box;
+  html{ width:100%; max-width:100%; overflow-x:clip; -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+  body{ width:100%; max-width:100%; overflow-x:clip; overflow-wrap:break-word; font-size:14px; }
+  main, section, header, footer{ max-width:100%; min-width:0; }
+
+  /* 2. SIDE SPACE: only the page containers add it ------------------- */
+  .wrap{
+    width:100%; max-width:100%; min-width:0;
+    padding-left:var(--mobile-space); padding-right:var(--mobile-space);
+  }
+  .upload-wrap{ padding:24px var(--mobile-space); }
+  .pf{ padding:20px var(--mobile-space) 36px; gap:18px; }
+  .c-wrap{ padding-left:var(--mobile-space); padding-right:var(--mobile-space); }
+
+  .section{ padding:28px 0; }
+  .section h2{ font-size:20px; line-height:1.2; }
+
+  /* 3. HEADER (compact) ---------------------------------------------- */
+  .header-inner{ height:56px; gap:10px; min-width:0; }
+  .brand, .header-actions{ min-width:0; }
+  .brand-mark{ width:32px; height:32px; border-radius:10px; }
+  .brand-name{ font-size:18px; }
+  .icon-btn{ width:36px; height:36px; border-radius:10px; flex-shrink:0; }
+  .header-actions{ gap:6px; }
+  .site-header .mobile-menu{ padding:10px var(--mobile-space) 14px; gap:8px; }
+  .site-header .mobile-menu button{ padding:10px 12px; font-size:14px; border-radius:12px; }
+
+  /* 4. SEARCH OVERLAY ------------------------------------------------ */
+  .overlay{ padding:64px var(--mobile-space) 0; }
+  .search-panel{ border-radius:18px; box-shadow:3px 3px 0 var(--ink); }
+  .search-top{ padding:12px 14px; }
+  .search-top input{ font-size:16px; min-width:0; }
+  .search-results{ padding:10px; }
+
+  /* 5. HERO ---------------------------------------------------------- */
+  .hero-inner{ padding:32px 0 36px; min-width:0; }
+  .hero-title{ font-size:30px; line-height:1.1; margin-top:12px; }
+  .hero-sub{ font-size:14px; line-height:1.5; margin-top:14px; }
+
+  /* buttons stay small and sit side by side, centred */
+  .hero-actions{ margin-top:22px; gap:10px; flex-wrap:wrap; justify-content:center; }
+
+  .hero-search{ margin-top:26px; padding:12px 14px; gap:10px; border-radius:14px; box-shadow:3px 3px 0 var(--ink); }
+  .hero-search span{ font-size:13px; min-width:0; overflow-wrap:anywhere; }
+  .hero-stats{ margin-top:26px; gap:8px 18px; font-size:12px; }
+
+  .blob-sun{ width:190px; height:190px; right:-70px; top:-50px; }
+  .blob-sky{ width:160px; height:160px; left:-70px; top:170px; }
+
+  /* 6. BUTTONS: desktop look, just a touch smaller ------------------- */
+  .btn{ padding:8px 14px; font-size:13px; border-radius:14px; border-width:2.5px; }
+  .btn-lg{ padding:10px 18px; font-size:14px; }
+  .btn-sm{ padding:5px 10px; font-size:12px; }
+  .btn-primary, .btn-secondary, .btn-sky{ box-shadow:2px 2px 0 var(--ink); }
+  .eyebrow{ font-size:11px; }
+  .badge{ font-size:10px; }
+
+  /* 7. GRIDS: gap only, no outer margins ----------------------------- */
+  .grid{ gap:12px; }
+
+  .dept-grid, .subject-grid, .teacher-grid, .steps-grid, .dash-grid{
+    margin-top:18px; grid-template-columns:minmax(0,1fr); gap:12px; min-width:0;
+  }
+  .cat-grid, .resource-grid{ margin-top:12px; grid-template-columns:minmax(0,1fr); gap:10px; min-width:0; }
+
+  .quick-grid, .year-grid, .sem-grid, .stat-grid{
+    margin-top:18px; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; min-width:0;
+  }
+  .sem-grid{ max-width:100%; }
+  .info-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; min-width:0; }
+
+  /* 8. CARDS: compact, everything inside ----------------------------- */
+  .dept-card, .subject-card, .teacher-card, .resource-card,
+  .year-card, .sem-card, .step-card, .quick-card, .pf-card, .cat-card, .stat-card{
+    margin:0; min-width:0; max-width:100%;
   }
 
-  html{
-    width:100%;
-    max-width:100%;
-    overflow-x:clip;
+  .dept-card{ min-height:0; padding:16px; border-radius:16px; box-shadow:3px 3px 0 var(--ink); }
+  .dept-icon{ width:38px; height:38px; margin-bottom:10px; }
+  .dept-title{ font-size:16px; }
+  .dept-blurb{ font-size:13px; }
+  .dept-foot{ margin-top:12px; font-size:11px; }
+
+  .quick-card{ padding:14px 12px; border-radius:14px; box-shadow:3px 3px 0 var(--ink); gap:6px; }
+  .quick-emoji{ font-size:24px; }
+
+  .step-card{ padding:16px; }
+  .step-num{ width:32px; height:32px; margin-bottom:10px; }
+  .step-title{ font-size:16px; }
+  .step-body{ font-size:13px; }
+
+  .year-card{ min-height:110px; padding:16px 14px; border-radius:16px; box-shadow:3px 3px 0 var(--ink); }
+  .year-card::after{ right:12px; bottom:10px; font-size:22px; }
+
+  .sem-card{ min-height:120px; padding:16px 14px; border-radius:16px; box-shadow:3px 3px 0 var(--ink); }
+  .sem-card::before{ width:36px; height:36px; line-height:36px; margin-bottom:12px; font-size:18px; }
+  .sem-card::after{ right:12px; bottom:10px; font-size:22px; }
+
+  .subject-card{ min-height:0; padding:16px 14px 14px; border-radius:14px; box-shadow:3px 3px 0 var(--ink); }
+  .subject-name{ font-size:16px; margin-top:12px; }
+  .subject-teachers{ font-size:11px; }
+  .subject-foot{ margin-top:12px; font-size:11px; }
+
+  .teacher-card{ padding:16px; box-shadow:3px 3px 0 var(--ink); }
+  .teacher-avatar{ width:40px; height:40px; font-size:16px; }
+  .teacher-name{ font-size:16px; margin-top:10px; }
+  .teacher-foot{ margin-top:12px; }
+
+  .resource-card{ padding:14px; gap:8px; box-shadow:3px 3px 0 var(--ink); }
+  .res-title{ font-size:14px; }
+  .res-actions{ gap:6px; }
+
+  .cat-card{ min-height:60px; padding:12px 14px; gap:10px; border-radius:14px; box-shadow:2px 2px 0 var(--ink); }
+  .cat-emoji{ font-size:22px; }
+
+  .stat-card{ padding:12px 8px; border-radius:14px; }
+  .stat-value{ font-size:20px; }
+  .stat-label{ font-size:11px; }
+
+  .dept-title, .dept-blurb, .subject-name, .subject-teachers, .teacher-name, .teacher-sub,
+  .res-title, .res-meta, .res-meta2, .step-title, .step-body,
+  .dash-card-title, .dash-card-sub, .info-value{
+    max-width:100%; min-width:0; overflow-wrap:anywhere;
   }
+
+  .dash-title{ font-size:24px; }
+  .dash-card{ padding:16px; box-shadow:3px 3px 0 var(--ink); }
+  .dash-card-title{ font-size:15px; }
+  .section-head h2{ font-size:18px; }
+  .unit-group h3{ font-size:16px; }
+
+  /* 9. BREADCRUMBS AND CHIPS ----------------------------------------- */
+  .breadcrumb{ font-size:12px; gap:5px; margin-bottom:14px; min-width:0; }
+  .crumb{ padding:3px 9px; max-width:100%; overflow-wrap:anywhere; }
+
+  /* chips scroll sideways like an app tab strip */
+  .unit-chips{ margin-top:14px; gap:8px; max-width:100%; min-width:0; }
+  .unit-chip{ padding:5px 11px; font-size:13px; }
+  .c-chips, .c-units{ gap:8px; max-width:100%; min-width:0; }
+  .c-chip{ padding:6px 11px; font-size:12px; max-width:100%; }
+
+  /* 10. MODAL (bottom sheet, same look as desktop) ------------------- */
+  .modal-panel{ min-width:0; max-height:92vh; max-height:92dvh; box-shadow:none; }
+  .modal-head{ padding:16px var(--mobile-space); }
+  .modal-title{ font-size:20px; margin-top:10px; overflow-wrap:anywhere; }
+  .modal-sub{ font-size:13px; }
+  .modal-body{ padding:16px var(--mobile-space) calc(18px + env(safe-area-inset-bottom,0px)); gap:12px; }
+  .modal-desc{ font-size:13px; }
+  .info-label{ font-size:10px; }
+  .info-value{ font-size:13px; }
+  .preview-box{ min-height:130px; }
+  .pdf-preview{ height:55vh; max-height:440px; border-radius:14px; }
+  .modal-actions{ gap:8px; }
+  .save-toggle{ width:40px; height:40px; border-radius:14px; box-shadow:2px 2px 0 var(--ink); }
+  .related-row{ padding:9px 12px; font-size:13px; overflow-wrap:anywhere; }
+
+  /* 11. UPLOAD + AUTH FORMS ------------------------------------------ */
+  .upload-title{ font-size:24px; }
+  .upload-form{ margin-top:20px; padding:18px 16px; gap:14px; border-radius:18px; box-shadow:3px 3px 0 var(--ink); }
+  .form-grid{ gap:12px; }
+  .dropzone{ padding:22px 12px; }
+  .dropzone span{ font-size:13px; }
+  .upload-success{ padding:56px var(--mobile-space); }
+  .upload-success h1{ font-size:22px; }
+  .success-actions{ flex-wrap:wrap; }
+
+  .auth-seg, .social-row, .pw-rules{ max-width:100%; min-width:0; }
+  .pw-rules{ font-size:11px; }
+  .code-input{ font-size:22px !important; letter-spacing:.35em; }
+
+  /* 16px keeps iPhones from zooming in when you tap a field */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select{
+    font-size:16px; max-width:100%; min-width:0;
+  }
+  .field input, .field textarea, .field select, .form-grid input, .form-grid select{ padding:10px 12px; }
+
+  /* 12. PROFILE PAGE ------------------------------------------------- */
+  .pf-side{ padding:20px 16px; gap:10px; border-radius:20px; box-shadow:3px 3px 0 var(--ink); }
+  .pf-panel{ padding:16px; margin-top:0; border-radius:20px; box-shadow:3px 3px 0 var(--ink); }
+  .pf-side, .pf-panel, .pf-edit, .pf-pick, .pf-code{ min-width:0; max-width:100%; }
+  .pf-avatar{ width:100px; height:100px; border-radius:26px; }
+  .pf-name{ font-size:24px; overflow-wrap:anywhere; }
+  .pf-mail{ font-size:12px; }
+  .pf-pick{ flex-wrap:wrap; justify-content:center; gap:10px; }
+  .pf-mini{ width:54px; height:54px; }
+  .pf-opt{ font-size:12px; padding:6px 8px; }
+  .pf-btn{ padding:10px 14px; font-size:14px; border-radius:14px; }
+  .pf-grid{ grid-template-columns:minmax(0,1fr); gap:12px; }
+  .pf-card{ min-height:0; padding:16px; border-radius:20px; box-shadow:3px 3px 0 var(--ink); }
+  .pf-card b{ font-size:18px; margin-top:8px; }
+  .pf-sub{ font-size:13px; overflow-wrap:anywhere; }
+  .pf-ic{ width:38px; height:38px; }
+  .pf-row{ flex-wrap:wrap; }
+  .pf-row > *{ flex:1 1 120px; min-width:0; }
+  .pf-code input{ width:100%; flex:1 1 100%; min-width:0; }
+  .pf-code .pf-btn{ width:auto; }
+
+  /* 13. CONTRIBUTION PAGE -------------------------------------------- */
+  .c-hero{ padding:26px 16px; border-radius:20px; box-shadow:4px 4px 0 var(--ink); margin-bottom:16px; }
+  .c-title{ font-size:26px; }
+  .c-lead{ font-size:14px; }
+  .c-panel{ padding:20px 16px; border-radius:20px; box-shadow:4px 4px 0 var(--ink); margin-bottom:16px; }
+  .c-panel h2{ font-size:20px; }
+  .c-form{ padding:18px 16px; border-radius:20px; box-shadow:4px 4px 0 var(--ink); }
+  .c-lock{ width:76px; height:76px; }
+  .c-drop{ padding:22px 12px; }
+  .c-muted{ font-size:13px; }
+  .c-h{ font-size:16px; }
+  .c-hero, .c-panel, .c-form, .c-row, .c-file{ min-width:0; max-width:100%; }
+  .c-title, .c-lead, .c-h, .c-muted{ max-width:100%; overflow-wrap:anywhere; }
+  .c-tablewrap{ max-width:100%; -webkit-overflow-scrolling:touch; }
+
+  /* 14. MEDIA -------------------------------------------------------- */
+  img, video, canvas{ max-width:100%; height:auto; }
+
+  /* 15. FOOTER ------------------------------------------------------- */
+  .site-footer{ margin-top:36px; }
+  .footer-grid{
+    padding:28px 0 20px; gap:22px 16px;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .footer-brand{ grid-column:1 / -1; }
+  .footer-brand, .footer-col, .footer-links, .footer-about{ min-width:0; padding:0; overflow-wrap:anywhere; }
+  .footer-about-text{ font-size:13px; max-width:100%; }
+  .footer-links, .footer-about{ font-size:13px; }
+  .footer-social{ flex-wrap:wrap; }
+  .social-btn{ width:34px; height:34px; }
+  .footer-bottom{ padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px)); margin:0; font-size:11px; }
+
+  /* 16. EMPTY STATE + TOAST ------------------------------------------ */
+  .empty-state{ padding:32px 16px; }
+  .empty-title{ font-size:16px; }
+  .empty-body{ font-size:13px; }
+
+  /* base centring + slide-in animation are kept; only the size is limited */
+  .toast{ width:max-content; max-width:calc(100% - 36px); bottom:calc(16px + env(safe-area-inset-bottom,0px)); font-size:13px; text-align:center; }
+
+  /* 17. VERY SMALL PHONES (under 360px) ------------------------------ */
+  @media (max-width:359px){
+    :root{ --mobile-space:14px; }
+    .hero-title{ font-size:26px; }
+    .quick-grid, .info-grid, .pw-rules, .footer-grid{ grid-template-columns:minmax(0,1fr); }
+    .brand-name{ font-size:17px; }
+    .toast{ max-width:calc(100% - 28px); }
+  }
+}
+
+
+/* =====================================================================
+   PHONE SIDE MARGIN (MOBILE ONLY)  -  max-width:639px
+   The margin is applied to the whole page, so every page, card, search
+   bar, preview and button stays inside the screen with a gap on both
+   sides, whatever wrapper the HTML uses. Desktop is not touched.
+   ===================================================================== */
+@media screen and (max-width:639px){
+
+  :root{ --g:16px; }
+
+  html, body{ margin:0 !important; }
 
   body{
-    width:100%;
-    max-width:100%;
-    margin:0;
+    width:100% !important;
+    max-width:100% !important;
+    padding-left:var(--g) !important;
+    padding-right:var(--g) !important;
     overflow-x:clip;
   }
 
-  /* 2. GLOBAL SIDE SPACING */
-
-  :root{
-    --mobile-space:16px;
+  /* inner containers no longer add their own side padding (no double gap) */
+  .wrap, .upload-wrap, .pf, .c-wrap{
+    padding-left:0 !important;
+    padding-right:0 !important;
+    margin-left:auto !important;
+    margin-right:auto !important;
+    max-width:100% !important;
   }
 
-  /* Main page containers */
-
-  .wrap{
-    width:100%;
-    max-width:100%;
-    padding-left:var(--mobile-space);
-    padding-right:var(--mobile-space);
-    margin-left:auto;
-    margin-right:auto;
-    min-width:0;
+  /* header, hero and footer keep their full-width bar / background,
+     but their content is pulled back inside the same margin */
+  .site-header, .site-footer, .hero{
+    margin-left:calc(-1 * var(--g)) !important;
+    margin-right:calc(-1 * var(--g)) !important;
+    padding-left:var(--g) !important;
+    padding-right:var(--g) !important;
+    width:auto !important;
+    max-width:none !important;
   }
+  .site-header .mobile-menu{ padding-left:0 !important; padding-right:0 !important; }
 
-  /* 3. ALL PAGE SECTIONS */
-
-  main,
-  section,
-  header,
-  footer{
-    max-width:100%;
-    min-width:0;
-  }
-
-  .section,
-  .hero,
-  .upload-wrap,
-  .pf,
-  .c-wrap{
-    width:100%;
-    max-width:100%;
-    min-width:0;
-  }
-
-  /* Page-specific containers */
-
-  .upload-wrap,
-  .pf,
-  .c-wrap{
-    padding-left:var(--mobile-space);
-    padding-right:var(--mobile-space);
-  }
-
-  /* 4. HEADER */
-
-  .header-inner{
-    width:100%;
-    max-width:100%;
-    min-width:0;
-  }
-
-  .brand,
-  .header-actions{
-    min-width:0;
-  }
-
-  .brand-name{
-    overflow-wrap:anywhere;
-  }
-
-  /* 5. HERO SECTION */
-
-  .hero-inner{
-    width:100%;
-    max-width:100%;
-    min-width:0;
-    padding:10px;
-  }
-
-  .hero-title,
-  .hero-sub{
-    max-width:100%;
-    overflow-wrap:break-word;
-  }
-
-  .hero-actions,
-  .hero-search,
-  .hero-stats{
-    width:100%;
-    max-width:100%;
-    min-width:0;
-  }
-
-  .hero-actions .btn{
-    max-width:100%;
-  }
-
-  /* 6. ALL GRIDS */
-
-  .quick-grid,
-  .year-grid,
-  .sem-grid,
-  .stat-grid,
-  .dash-grid,
-  .footer-grid,
-  .info-grid,
-  .pf-grid{
-    width:100%;
-    max-width:100%;
-    min-width:0;
-  }
-
-  .quick-grid,
-  .year-grid,
-  .sem-grid,
-  .stat-grid,
-  .dash-grid,
-  .footer-grid,
-  .info-grid{
-    grid-template-columns:minmax(0,1fr);
-  }
-
-  /* 7. CARDS */
-
-  .dept-card,
-  .subject-card{ margin:12px;}
-  .teacher-card,
-  .resource-card{ margin:15px;}
-  .year-card{
-   
-    margin:12px;
-  }
-  .sem-card{ margin:12px;}
-  .step-card,
-  .quick-card,
-  .pf-card{
-    max-width:100%;
-    min-width:0;
-    
-  }
-
-  .dept-title,
-  .dept-blurb,
-  .subject-name,
-  .subject-teachers,
-  .teacher-name,
-  .res-title,
-  .res-meta,
-  .res-meta2,
-  .step-title,
-  .step-body{
-    max-width:100%;
-    min-width:0;
-    overflow-wrap:anywhere;
-  }
-
-  /* 8. BREADCRUMBS AND CHIPS */
-
-  .breadcrumb{
-    max-width:100%;
-    min-width:0;
-    flex-wrap:wrap;
-   
-  }
-
-  .crumb{
-    max-width:100%;
-    overflow-wrap:anywhere;
-  }
-
-  .unit-chips,
-  .c-chips{
-    max-width:100%;
-    min-width:0;
-    flex-wrap:wrap;
-  }
-
-  .unit-chip,
-  .c-chip{
-    max-width:100%;
-    min-width:0;
-    overflow-wrap:anywhere;
-  }
-
-  /* 9. MODALS */
-
-  .modal-overlay{
-    width:100%;
-    max-width:100%;
-    padding-left:0;
-    padding-right:0;
-  }
-
+  /* pop-up sheet: floats inside the screen instead of touching the sides */
+  .modal-overlay{ padding:0 var(--g) 12px !important; }
   .modal-panel{
-    width:100%;
-    max-width:100%;
-    min-width:0;
+    border-width:3px !important;
+    border-radius:20px !important;
+    box-shadow:3px 3px 0 var(--ink) !important;
+    max-height:88vh;
+    max-height:88dvh;
   }
+  .overlay{ padding-left:var(--g) !important; padding-right:var(--g) !important; }
+  .search-panel{ box-shadow:3px 3px 0 var(--ink); }
 
-  .modal-content{
-    width:100%;
-    max-width:100%;
-    min-width:0;
-    padding-left:var(--mobile-space);
-    padding-right:var(--mobile-space);
-  }
+  /* never let any child be wider than the screen */
+  .site-header *, main *, .site-footer *{ max-width:100%; }
+  .brand-mark, .icon-btn, .c-pdf, .c-x, .c-open, .c-open svg, .save-toggle,
+  .pf-avatar, .teacher-avatar, .dept-icon, .step-num, .social-btn{ max-width:none; }
 
-  .modal-title{
-    max-width:100%;
-    overflow-wrap:anywhere;
-  }
-
-  .auth-seg,
-  .social-row,
-  .pw-rules{
-    max-width:100%;
-    min-width:0;
-  }
-
-  /* 10. PROFILE PAGE */
-
-  .pf-side,
-  .pf-panel,
-  .pf-row,
-  .pf-code,
-  .pf-pick{
-    width:100%;
-    max-width:100%;
-    min-width:0;
-  }
-
-  .pf-name,
-  .pf-sub{
-    max-width:100%;
-    overflow-wrap:anywhere;
-  }
-
-  .pf-code input{
-    width:100%;
-    max-width:100%;
-    min-width:0;
-  }
-
-  .pf-grid{
-    grid-template-columns:repeat(
-      auto-fit,
-      minmax(min(100%,140px),1fr)
-    );
-  }
-
-  /* 11. CONTRIBUTION PAGE */
-
-  .c-hero,
-  .c-panel,
-  .c-form,
-  .c-row,
-  .c-file{
-    width:100%;
-    max-width:100%;
-    min-width:0;
-  }
-
-  .c-title,
-  .c-lead,
-  .c-h,
-  .c-muted{
-    max-width:100%;
-    overflow-wrap:anywhere;
-  }
-
-  .c-steps{
-    max-width:100%;
-    min-width:0;
-  }
-
-  .c-step{
-    min-width:0;
-  }
-
-  /* Tables scroll internally instead of
-     pushing the entire mobile page sideways */
-
-  .c-table{
-    display:block;
-    width:100%;
-    max-width:100%;
-    overflow-x:auto;
-    -webkit-overflow-scrolling:touch;
-  }
-
-  /* 12. INPUTS AND BUTTONS */
-
-  input,
-  textarea,
-  select,
-  button,
-  .btn{
-    max-width:100%;
-    min-width:0;
-    box-sizing:border-box;
-  }
-
-  input,
-  textarea,
-  select{
-    width:100%;
-  }
-
-  textarea{
-    resize:vertical;
-
-  }
-
-  button,
-  .btn{
-    overflow-wrap:break-word;
-    
-  }
-
-  /* 13. IMAGES AND MEDIA */
-
-  img,
-  video,
-  canvas,
-  svg{
-    max-width:100%;
-  }
-
-  img,
-  video{
-    height:auto;
-  }
-
-  /* 14. FOOTER */
-
-  .footer-grid{
-    width:100%;
-    max-width:100%;
-    padding-left:0;
-    padding-right:0;
-  }
-
-  .footer-brand,
-  .footer-col,
-  .footer-links,
-  .footer-about{
-    max-width:100%;
-    min-width:0;
-    padding:10px;
-  }
-
-  .footer-bottom{
-    max-width:100%;
-    min-width:0;
-    padding:10px;
-    overflow-wrap:anywhere;
-  }
-
-  /* 15. TOAST NOTIFICATIONS */
-
-  .toast{
-    width:calc(100% - 32px);
-    max-width:calc(100% - 32px);
-    left:16px;
-    right:16px;
-    margin-left:0;
-    margin-right:0;
-    transform:none;
-  }
-
-  /* 16. VERY SMALL PHONES */
+  /* smaller, tidier cards */
+  .dept-card{ padding:14px; }
+  .subject-card{ padding:14px 12px 12px; }
+  .teacher-card{ padding:14px; }
+  .resource-card{ padding:12px; }
+  .quick-card{ padding:12px 10px; }
+  .year-card{ min-height:96px; padding:14px 12px; }
+  .sem-card{ min-height:104px; padding:14px 12px; }
+  .step-card{ padding:14px; }
+  .dash-card{ padding:14px; }
+  .year-card::after, .sem-card::after{ font-size:20px; right:10px; bottom:8px; }
 
   @media (max-width:359px){
-
-    :root{
-      --mobile-space:12px;
-    }
-
-    .toast{
-      width:calc(100% - 24px);
-      max-width:calc(100% - 24px);
-      left:12px;
-      right:12px;
-    }
-
+    :root{ --g:12px; }
   }
+}
+/* Allow text selection inside the PDF preview */
+.pdf-page {
+  position: relative;
+}
 
+.pdf-canvas {
+  display: block;
+}
+
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  opacity: 1;
+  text-align: initial;
+  transform-origin: 0 0;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.textLayer span,
+.textLayer br {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  transform-origin: 0 0;
+}
+
+.textLayer ::selection {
+  background: rgba(0, 120, 255, 0.3);
+}
+/* Fix PDF text selection */
+.textLayer,
+.textLayer * {
+  pointer-events: auto !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -webkit-touch-callout: default;
+}
+
+.textLayer {
+  cursor: text;
+  z-index: 2;
+}
+
+.pdf-canvas {
+  z-index: 1;
 }
