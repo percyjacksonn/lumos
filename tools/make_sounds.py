@@ -1,12 +1,9 @@
-"""
-Builds assets/lumos-ui.mp3  - ONE small audio sprite holding every Lumos UI sound.
-The sounds are synthesised here (sine / triangle / square notes with a fast attack and decay),
-so they are original, royalty-free and have no licence to worry about.
-Run:  python3 tools/make_sounds.py      (needs numpy, soundfile and ffmpeg)
-Then paste the printed SPRITE map into sounds.js if you change anything.
-"""
+
 import json, subprocess, numpy as np, soundfile as sf
 SR = 44100
+
+MASTER_PEAK = 0.90
+
 # name -> notes [freq, start(s), length(s), wave, volume, slideTo]
 SOUNDS = {
  "click":   [[520, 0, .06, "triangle", .10]],
@@ -29,12 +26,14 @@ SOUNDS = {
  "ready":   [[880, 0, .07, "sine", .07], [1175, .07, .13, "sine", .07]],     # a preview / a long load has finished
  "notify":  [[1047, 0, .08, "sine", .08], [784, .09, .14, "sine", .08]],     # a gentle notice
 }
+
 def wave(kind, phase):
     if kind == "sine": return np.sin(phase)
     if kind == "triangle": return (2 / np.pi) * np.arcsin(np.sin(phase))
     if kind == "square":                                   # slightly softened square (no harsh aliasing)
         return np.tanh(6 * np.sin(phase)) * 0.9
     raise ValueError(kind)
+
 def note(f, at, ln, kind, vol, to=None):
     n = int((ln + .03) * SR); t = np.arange(n) / SR
     fr = f * (to / f) ** (np.clip(t / ln, 0, 1)) if to else np.full(n, f, float)
@@ -42,6 +41,7 @@ def note(f, at, ln, kind, vol, to=None):
     a = 0.008
     env = np.where(t < a, 1e-4 * (vol / 1e-4) ** (t / a), vol * (1e-4 / vol) ** (np.clip((t - a) / max(ln - a, 1e-3), 0, 1)))
     return int(at * SR), wave(kind, ph) * env
+
 def render(notes):
     total = max(at + ln for _, at, ln, *_ in notes) + .06
     buf = np.zeros(int(total * SR))
@@ -49,12 +49,19 @@ def render(notes):
         s, y = note(*nn); buf[s:s + len(y)] += y[: len(buf) - s]
     buf[-int(.02 * SR):] *= np.linspace(1, 0, int(.02 * SR))
     return buf
+
+# 1) render every sound at its natural (relative) level - no per-sound limiting
 GAP = int(.15 * SR); out = []; sprite = {}; pos = 0
 for name, notes in SOUNDS.items():
-    y = render(notes); y = y * (0.55 / max(abs(y).max(), 1e-6)) if abs(y).max() > 0.55 else y * 1.0
+    y = render(notes)
     sprite[name] = [round(pos / SR * 1000), round(len(y) / SR * 1000)]
     out += [y, np.zeros(GAP)]; pos += len(y) + GAP
-audio = np.concatenate(out); audio *= min(1.0, 0.8 / max(abs(audio).max(), 1e-6))
+
+# 2) ONE master gain: raise the whole sprite so its loudest sound hits MASTER_PEAK.
+#    Every sound keeps its loudness relative to the others (error stays softer than download).
+audio = np.concatenate(out)
+audio *= MASTER_PEAK / max(abs(audio).max(), 1e-6)
+
 sf.write("/tmp/lumos-ui.wav", audio.astype("float32"), SR, subtype="PCM_16")
 subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", "/tmp/lumos-ui.wav", "-ac", "1", "-b:a", "96k", "assets/lumos-ui.mp3"], check=True)
 print("total seconds:", round(len(audio) / SR, 2)); print("SPRITE =", json.dumps(sprite))
