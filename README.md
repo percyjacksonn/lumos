@@ -51,20 +51,6 @@ Notes, question papers and lab manuals end up scattered across WhatsApp groups, 
 
 **Only the Lumos admin and people who have the secret code can contribute.** Anyone can open the Contribute page and read how it works. Uploading needs a login and the code.
 
-```mermaid
-flowchart LR
-    A([Visitor opens Contribute]) --> B{Logged in?}
-    B -- No --> C[Log in or sign up]
-    C --> D
-    B -- Yes --> D{Secret code correct?}
-    D -- "Wrong, 3rd time" --> X[Blocked for 30 min + admin email]
-    D -- Wrong --> D
-    D -- Correct --> E[Upload PDF + details]
-    E --> F[(Supabase Storage + resources table)]
-    F --> G{Admin review}
-    G -- Approve --> H([Live Lumos card])
-    G -- Reject --> I([Hidden])
-```
 
 ---
 
